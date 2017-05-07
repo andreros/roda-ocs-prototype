@@ -1,0 +1,160 @@
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+	      http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+         version="2.5">
+
+    <!-- CMIS -->
+
+    <!-- Listeners -->
+    <listener>
+        <listener-class>org.apache.chemistry.opencmis.server.impl.CmisRepositoryContextListener</listener-class>
+    </listener>
+
+    <listener>
+        <listener-class>com.sun.xml.ws.transport.http.servlet.WSServletContextListener</listener-class>
+    </listener>
+
+    <!--
+         A servlet filter that logs all requests in files. Useful for monitoring and debugging.
+         Use it with care! It can generate a huge amount of files and will slow down performance
+         significantly.
+    -->
+    <!--
+    <filter>
+        <filter-name>LoggingFilter</filter-name>
+        <filter-class>org.apache.chemistry.openccmisrver.support.filter.LoggingFilter</filter-class>
+        <init-param>
+            <param-name>LogDir</param-name>
+            <param-value>C:\\wamp\\www\\openccmisrver\\target\\logs\\</param-value>
+        </init-param>
+        <init-param>
+            <param-name>PrettyPrint</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <init-param>
+            <param-name>LogHeader</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <init-param>
+            <param-name>Indent</param-name>
+            <param-value>4</param-value>
+        </init-param>
+    </filter>
+
+    <filter-mapping>
+        <filter-name>LoggingFilter</filter-name>
+        <servlet-name>cmisatom10</servlet-name>
+    </filter-mapping>
+    <filter-mapping>
+        <filter-name>LoggingFilter</filter-name>
+        <servlet-name>cmisatom11</servlet-name>
+    </filter-mapping>
+    <filter-mapping>
+        <filter-name>LoggingFilter</filter-name>
+        <servlet-name>cmisws10</servlet-name>
+    </filter-mapping>
+    <filter-mapping>
+        <filter-name>LoggingFilter</filter-name>
+        <servlet-name>cmisws11</servlet-name>
+    </filter-mapping>
+    <filter-mapping>
+        <filter-name>LoggingFilter</filter-name>
+        <servlet-name>cmisbrowser</servlet-name>
+    </filter-mapping>
+    -->
+
+    <!-- CMIS Web Service v1.0 (WSDL) -->
+    <servlet>
+        <servlet-name>cmisws10</servlet-name>
+        <servlet-class>org.apache.chemistry.opencmis.server.impl.webservices.CmisWebServicesServlet</servlet-class>
+        <init-param>
+            <param-name>cmisVersion</param-name>
+            <param-value>1.0</param-value>
+        </init-param>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>cmisws10</servlet-name>
+        <url-pattern>/services/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- CMIS ATOM v1.0 -->
+    <servlet>
+        <servlet-name>cmisatom10</servlet-name>
+        <servlet-class>org.apache.chemistry.opencmis.server.impl.atompub.CmisAtomPubServlet</servlet-class>
+        <init-param>
+            <param-name>callContextHandler</param-name>
+            <param-value>org.apache.chemistry.opencmis.server.shared.BasicAuthCallContextHandler</param-value>
+        </init-param>
+        <init-param>
+            <param-name>cmisVersion</param-name>
+            <param-value>1.0</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>cmisatom10</servlet-name>
+        <url-pattern>/atom/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- CMIS Web Service v1.1 (WSDL) -->
+    <servlet>
+        <servlet-name>cmisws11</servlet-name>
+        <servlet-class>org.apache.chemistry.opencmis.server.impl.webservices.CmisWebServicesServlet</servlet-class>
+        <init-param>
+            <param-name>cmisVersion</param-name>
+            <param-value>1.1</param-value>
+        </init-param>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>cmisws11</servlet-name>
+        <url-pattern>/services11/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- CMIS ATOM v1.1 -->
+    <servlet>
+        <servlet-name>cmisatom11</servlet-name>
+        <servlet-class>org.apache.chemistry.opencmis.server.impl.atompub.CmisAtomPubServlet</servlet-class>
+        <init-param>
+            <param-name>callContextHandler</param-name>
+            <param-value>org.apache.chemistry.opencmis.server.shared.BasicAuthCallContextHandler</param-value>
+        </init-param>
+        <init-param>
+            <param-name>cmisVersion</param-name>
+            <param-value>1.1</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>cmisatom11</servlet-name>
+        <url-pattern>/atom11/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- CMIS JSON v1.1 -->
+    <servlet>
+        <servlet-name>cmisbrowser</servlet-name>
+        <servlet-class>org.apache.chemistry.opencmis.server.impl.browser.CmisBrowserBindingServlet</servlet-class>
+        <init-param>
+            <param-name>callContextHandler</param-name>
+            <param-value>org.apache.chemistry.opencmis.server.shared.BasicAuthCallContextHandler</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>cmisbrowser</servlet-name>
+        <url-pattern>/browser/*</url-pattern>
+    </servlet-mapping>
+
+    <!-- Session Configuration -->
+    <session-config>
+        <session-timeout>60</session-timeout>
+    </session-config>
+
+</web-app>

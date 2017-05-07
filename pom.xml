@@ -1,0 +1,71 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.roda.wui.cmis</groupId>
+    <artifactId>roda-cmis-server</artifactId>
+    <packaging>war</packaging>
+    <version>0.1-SNAPSHOT</version>
+
+    <name>RODA CMIS Server</name>
+
+    <properties>
+        <opencmis.version>0.11.0</opencmis.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.8.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.8.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.8.4</version>
+        </dependency>
+
+        <!-- Cmis Server AtomPub and Web Services binding implementation. See OpenCMIS Server Framework for details. -->
+        <dependency>
+            <groupId>org.apache.chemistry.opencmis</groupId>
+            <artifactId>chemistry-opencmis-server-bindings-war</artifactId>
+            <version>${opencmis.version}</version>
+            <type>war</type>
+        </dependency>
+        <dependency><!-- for development only -->
+            <groupId>org.apache.chemistry.opencmis</groupId>
+            <artifactId>chemistry-opencmis-server-bindings</artifactId>
+            <version>${opencmis.version}</version>
+        </dependency>
+
+        <!-- Convenience classes for repository connectors. This module contains the CMIS query parser. -->
+        <dependency>
+            <groupId>org.apache.chemistry.opencmis</groupId>
+            <artifactId>chemistry-opencmis-server-support</artifactId>
+            <version>${opencmis.version}</version>
+        </dependency>
+
+        <!-- Java servlet API 2.5 -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
+            <version>2.5</version>
+        </dependency>
+
+        <dependency><!-- enables OpenCMIS frame logging to log4j -->
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.5</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>roda-cmis-server</finalName>
+    </build>
+
+</project>
