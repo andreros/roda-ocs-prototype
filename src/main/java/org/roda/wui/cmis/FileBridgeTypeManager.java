@@ -1,10 +1,16 @@
 package org.roda.wui.cmis;
 
 import org.apache.chemistry.opencmis.commons.definitions.*;
+import org.apache.chemistry.opencmis.commons.enums.Cardinality;
 import org.apache.chemistry.opencmis.commons.enums.CmisVersion;
+import org.apache.chemistry.opencmis.commons.enums.PropertyType;
+import org.apache.chemistry.opencmis.commons.enums.Updatability;
 import org.apache.chemistry.opencmis.commons.exceptions.CmisObjectNotFoundException;
+import org.apache.chemistry.opencmis.commons.impl.dataobjects.PropertyStringDefinitionImpl;
 import org.apache.chemistry.opencmis.commons.server.CallContext;
 import org.apache.chemistry.opencmis.server.support.TypeDefinitionFactory;
+import org.roda.wui.cmis.enums.FileBridgeCmisTypeId;
+import org.roda.wui.cmis.enums.MetadataEadFieldId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +46,27 @@ public class FileBridgeTypeManager {
         typeDefinitions = new HashMap<String, TypeDefinition>();
 
         // add base folder type
-        MutableFolderTypeDefinition folderType = typeDefinitionFactory
-                .createBaseFolderTypeDefinition(CmisVersion.CMIS_1_1);
+        MutableFolderTypeDefinition folderType = typeDefinitionFactory.createBaseFolderTypeDefinition(CmisVersion.CMIS_1_1);
         removeQueryableAndOrderableFlags(folderType);
         typeDefinitions.put(folderType.getId(), folderType);
 
         // add base document type
-        MutableDocumentTypeDefinition documentType = typeDefinitionFactory
-                .createBaseDocumentTypeDefinition(CmisVersion.CMIS_1_1);
-        removeQueryableAndOrderableFlags(documentType);
-        typeDefinitions.put(documentType.getId(), documentType);
+        MutableDocumentTypeDefinition baseDocumentType = typeDefinitionFactory.createBaseDocumentTypeDefinition(CmisVersion.CMIS_1_1);
+        removeQueryableAndOrderableFlags(baseDocumentType);
+        typeDefinitions.put(baseDocumentType.getId(), baseDocumentType);
+
+        // add roda document type
+        MutableDocumentTypeDefinition rodaDocumentType = typeDefinitionFactory.createDocumentTypeDefinition(CmisVersion.CMIS_1_1, baseDocumentType.getId());
+        rodaDocumentType.setId(FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value());
+        rodaDocumentType.setQueryName(FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value());
+        rodaDocumentType.setDisplayName("RODA Document");
+        rodaDocumentType.setDescription("RODA Document");
+
+        rodaDocumentType.getPropertyDefinitions().put(MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(), this.createPropertyStringDefinition(MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(), "Unit Id", "Unit Id"));
+        rodaDocumentType.getPropertyDefinitions().put(MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(), this.createPropertyStringDefinition(MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(), "Unit Title", "Unit Title"));
+
+        typeDefinitions.put(rodaDocumentType.getId(), rodaDocumentType);
+        String x = "";
     }
 
     /**
@@ -137,6 +154,27 @@ public class FileBridgeTypeManager {
                                                             Boolean includePropertyDefinitions) {
         return typeDefinitionFactory.createTypeDescendants(typeDefinitions, typeId, depth, includePropertyDefinitions,
                 context.getCmisVersion());
+    }
+
+    // --- Types methods ---
+
+    private PropertyStringDefinitionImpl createPropertyStringDefinition(String id, String displayName, String description) {
+
+        PropertyStringDefinitionImpl propertyStringDefinition = new PropertyStringDefinitionImpl();
+        propertyStringDefinition.setId(id);
+        propertyStringDefinition.setLocalName(id);
+        propertyStringDefinition.setQueryName(id);
+        propertyStringDefinition.setDisplayName(displayName);
+        propertyStringDefinition.setDescription(description);
+        propertyStringDefinition.setPropertyType(PropertyType.STRING);
+        propertyStringDefinition.setCardinality(Cardinality.SINGLE);
+        propertyStringDefinition.setUpdatability(Updatability.READWRITE);
+        propertyStringDefinition.setIsInherited(false);
+        propertyStringDefinition.setIsQueryable(true);
+        propertyStringDefinition.setIsOrderable(true);
+        propertyStringDefinition.setIsRequired(false);
+
+        return propertyStringDefinition;
     }
 
     @Override

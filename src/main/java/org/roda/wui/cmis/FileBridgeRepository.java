@@ -1,7 +1,5 @@
 package org.roda.wui.cmis;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.chemistry.opencmis.commons.PropertyIds;
 import org.apache.chemistry.opencmis.commons.data.*;
 import org.apache.chemistry.opencmis.commons.data.Properties;
@@ -17,10 +15,14 @@ import org.apache.chemistry.opencmis.commons.server.CallContext;
 import org.apache.chemistry.opencmis.commons.server.ObjectInfoHandler;
 import org.apache.chemistry.opencmis.commons.spi.Holder;
 
+import org.roda.wui.cmis.enums.FileBridgeCmisTypeId;
+import org.roda.wui.cmis.enums.MetadataEadFieldId;
+import org.roda.wui.cmis.metadata.DublinCore20021212Metadata;
+import org.roda.wui.cmis.metadata.Ead2002Metadata;
+import org.roda.wui.cmis.metadata.KeyValueMetadata;
+
 import java.io.*;
 import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -924,6 +926,11 @@ public class FileBridgeRepository {
         result.setHasMoreItems(false);
         int count = 0;
 
+        //metadata files for the AIP
+        Ead2002Metadata aipEad2002Metadata = new Ead2002Metadata();
+        DublinCore20021212Metadata aipDublinCore20021212Metadata = new DublinCore20021212Metadata();
+        KeyValueMetadata aipKeyValueMetadata = new KeyValueMetadata();
+
         // iterate through children
         for (File child : folder.listFiles()) {
             // skip hidden files, for example '.DS_Store'
@@ -934,7 +941,7 @@ public class FileBridgeRepository {
 
             String relativePath = child.getPath().replace(root.getPath()+"/", "");
             int pathLength = relativePath.split("/").length;
-            Boolean canReadRepresentations = false;
+            Boolean canReadAIP = false;
 
             //**********************************************************
             //we are in the AIPs "<guid>" root folder, iterate the direct children
@@ -946,30 +953,20 @@ public class FileBridgeRepository {
                 String[] firstLevelPathElements = firstLevelRelativePath.split("/");
 
                 //**********************************************************
-                // Read the "aip.json" file
+                // Check the "aip.json" file for AIP read permissions
                 if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("aip.json"))) {
-                    try {
-                        String json = new String(Files.readAllBytes(Paths.get(firstLevelChild.getPath())));
-                        ObjectMapper mapper = new ObjectMapper();
-                        JsonNode node = mapper.readTree(json);
+                    canReadAIP = FileBridgeUtils.canReadAIP(firstLevelChild.getPath());
 
-                        // check for reading permissions on this aip files
-                        if ((node.get("permissions") != null) && (node.get("permissions").get("groups") != null) &&
-                                (node.get("permissions").get("groups").get("READ") != null) &&
-                                node.get("permissions").get("groups").get("READ").isArray()) {
-
-                            for (JsonNode groupPermission : node.get("permissions").get("groups").get("READ")) {
-                                if (groupPermission.asText().equals("cmis")) { canReadRepresentations = true; }
-                            }
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                    //**********************************************************
+                    // Load the AIP metadata files
+                    if (canReadAIP) {
+                        aipEad2002Metadata = FileBridgeUtils.getEAD2002Metadata(firstLevelChild.getPath());
+                        aipDublinCore20021212Metadata = FileBridgeUtils.getDublinCore20021212Metadata(firstLevelChild.getPath());
+                        aipKeyValueMetadata = FileBridgeUtils.getKeyValueMetadata(firstLevelChild.getPath());
                     }
-
                 }
 
-
-                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadRepresentations) {
+                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadAIP) {
                     //**********************************************************
                     //we are in the "representations" folder, iterate the direct children
                     for (File secondLevelChild : firstLevelChild.listFiles()) {
@@ -1006,6 +1003,10 @@ public class FileBridgeRepository {
                                     }
 
                                     // build and add child object
+                                    System.out.println(aipEad2002Metadata.toString());
+                                    System.out.println(aipDublinCore20021212Metadata.toString());
+                                    System.out.println(aipKeyValueMetadata.toString());
+
                                     ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
                                     objectInFolder.setObject(compileObjectData(context, fourthLevelChild, filterCollection,
                                             iaa, false, userReadOnly, objectInfos));
@@ -1407,7 +1408,7 @@ public class FileBridgeRepository {
             objectInfo.setWorkingCopyId(null);
             objectInfo.setWorkingCopyOriginalId(null);
         } else {
-            typeId = BaseTypeId.CMIS_DOCUMENT.value();
+            typeId = FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value(); //BaseTypeId.CMIS_DOCUMENT.value();
             objectInfo.setBaseType(BaseTypeId.CMIS_DOCUMENT);
             objectInfo.setTypeId(typeId);
             objectInfo.setHasAcl(true);
@@ -1502,7 +1503,11 @@ public class FileBridgeRepository {
                         BaseTypeId.CMIS_DOCUMENT.value());
                 addPropertyId(result, typeId, filter,
                         PropertyIds.OBJECT_TYPE_ID,
-                        BaseTypeId.CMIS_DOCUMENT.value());
+                        FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value()); //BaseTypeId.CMIS_DOCUMENT.value());
+
+                //INSERT METADATA FIELDS INTO THE RODA DOCUMENT
+                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(), "UNIT ID");
+                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(), "UNIT TITLE");
 
                 // file properties
                 addPropertyBoolean(result, typeId, filter,
