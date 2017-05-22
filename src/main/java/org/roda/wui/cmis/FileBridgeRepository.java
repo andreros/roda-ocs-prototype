@@ -14,14 +14,11 @@ import org.apache.chemistry.opencmis.commons.impl.server.ObjectInfoImpl;
 import org.apache.chemistry.opencmis.commons.server.CallContext;
 import org.apache.chemistry.opencmis.commons.server.ObjectInfoHandler;
 import org.apache.chemistry.opencmis.commons.spi.Holder;
-
 import org.roda.wui.cmis.enums.FileBridgeCmisTypeId;
 import org.roda.wui.cmis.enums.MetadataDublinCoreFieldId;
 import org.roda.wui.cmis.enums.MetadataEadFieldId;
 import org.roda.wui.cmis.enums.MetadataKeyValueFieldId;
-import org.roda.wui.cmis.metadata.DublinCore20021212Metadata;
-import org.roda.wui.cmis.metadata.Ead2002Metadata;
-import org.roda.wui.cmis.metadata.KeyValueMetadata;
+import org.roda.wui.cmis.metadata.AipMetadata;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -63,6 +60,10 @@ public class FileBridgeRepository {
      * Users.
      */
     private final Map<String, Boolean> readWriteUserMap;
+    /**
+     * AIPs Metadata.
+     */
+    private final Map<String, AipMetadata> aipMetadataMap;
 
     /**
      * CMIS 1.0 repository info.
@@ -97,6 +98,9 @@ public class FileBridgeRepository {
 
         // set up read-write user map
         readWriteUserMap = new HashMap<String, Boolean>();
+
+        // set up aip metadata map
+        aipMetadataMap = new HashMap<String, AipMetadata>();
 
         // set up repository infos
         repositoryInfo10 = createRepositoryInfo(CmisVersion.CMIS_1_0);
@@ -350,7 +354,7 @@ public class FileBridgeRepository {
         }
 
         return compileObjectData(context, getFile(objectId), null, false,
-                false, userReadOnly, objectInfos, null, null, null);
+                false, userReadOnly, objectInfos);
     }
 
     /**
@@ -547,7 +551,7 @@ public class FileBridgeRepository {
         }
 
         return compileObjectData(context, newFile, null, false, false,
-                userReadOnly, objectInfos, null, null, null);
+                userReadOnly, objectInfos);
     }
 
     /**
@@ -733,7 +737,7 @@ public class FileBridgeRepository {
         }
 
         return compileObjectData(context, newFile, null, false, false,
-                userReadOnly, objectInfos, null, null, null);
+                userReadOnly, objectInfos);
     }
 
     /**
@@ -803,7 +807,7 @@ public class FileBridgeRepository {
 
         // gather properties
         return compileObjectData(context, file, filterCollection, iaa, iacl,
-                userReadOnly, objectInfos, null, null, null);
+                userReadOnly, objectInfos);
     }
 
     /**
@@ -919,7 +923,7 @@ public class FileBridgeRepository {
         // set object info of the the folder
         if (context.isObjectInfoRequired()) {
             compileObjectData(context, folder, null, false, false,
-                    userReadOnly, objectInfos, null, null, null);
+                    userReadOnly, objectInfos);
         }
 
         // prepare result
@@ -927,11 +931,6 @@ public class FileBridgeRepository {
         result.setObjects(new ArrayList<ObjectInFolderData>());
         result.setHasMoreItems(false);
         int count = 0;
-
-        //metadata files for the AIP
-        Ead2002Metadata aipEad2002Metadata = new Ead2002Metadata();
-        DublinCore20021212Metadata aipDublinCore20021212Metadata = new DublinCore20021212Metadata();
-        KeyValueMetadata aipKeyValueMetadata = new KeyValueMetadata();
 
         // iterate through children
         for (File child : folder.listFiles()) {
@@ -962,9 +961,20 @@ public class FileBridgeRepository {
                     //**********************************************************
                     // Load the AIP metadata files
                     if (canReadAIP) {
-                        aipEad2002Metadata = FileBridgeUtils.getEAD2002Metadata(firstLevelChild.getPath());
-                        aipDublinCore20021212Metadata = FileBridgeUtils.getDublinCore20021212Metadata(firstLevelChild.getPath());
-                        aipKeyValueMetadata = FileBridgeUtils.getKeyValueMetadata(firstLevelChild.getPath());
+                        AipMetadata aipMetadata = new AipMetadata(relativePath.split("/")[0]);
+                        aipMetadata.setEad2002Metadata(FileBridgeUtils.getEAD2002Metadata(firstLevelChild.getPath()));
+                        aipMetadata.setDublinCore20021212Metadata(FileBridgeUtils.getDublinCore20021212Metadata(firstLevelChild.getPath()));
+                        aipMetadata.setKeyValueMetadata(FileBridgeUtils.getKeyValueMetadata(firstLevelChild.getPath()));
+
+                        System.out.println(aipMetadata.getEad2002Metadata().toString());
+                        System.out.println(aipMetadata.getDublinCore20021212Metadata().toString());
+                        System.out.println(aipMetadata.getKeyValueMetadata().toString());
+
+                        //store the AIPs read metadata
+                        if (!aipMetadataMap.containsKey(aipMetadata.getId())) {
+                            aipMetadataMap.put(aipMetadata.getId(), aipMetadata);
+                        }
+
                     }
                 }
 
@@ -1004,15 +1014,9 @@ public class FileBridgeRepository {
                                         continue;
                                     }
 
-                                    // build and add child object
-                                    System.out.println(aipEad2002Metadata.toString());
-                                    System.out.println(aipDublinCore20021212Metadata.toString());
-                                    System.out.println(aipKeyValueMetadata.toString());
-
                                     ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
                                     objectInFolder.setObject(compileObjectData(context, fourthLevelChild,
-                                            filterCollection, iaa, false, userReadOnly, objectInfos,
-                                            aipEad2002Metadata, aipDublinCore20021212Metadata, aipKeyValueMetadata));
+                                            filterCollection, iaa, false, userReadOnly, objectInfos));
                                     if (ips) { objectInFolder.setPathSegment(fourthLevelChild.getName()); }
 
                                     result.getObjects().add(objectInFolder);
@@ -1077,7 +1081,7 @@ public class FileBridgeRepository {
         // set object info of the the folder
         if (context.isObjectInfoRequired()) {
             compileObjectData(context, folder, null, false, false,
-                    userReadOnly, objectInfos, null, null, null);
+                    userReadOnly, objectInfos);
         }
 
         // get the tree
@@ -1114,8 +1118,7 @@ public class FileBridgeRepository {
             // add to list
             ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
             objectInFolder.setObject(compileObjectData(context, child, filter,
-                    includeAllowableActions, false, userReadOnly, objectInfos,
-                    null, null, null));
+                    includeAllowableActions, false, userReadOnly, objectInfos));
             if (includePathSegments) {
                 objectInFolder.setPathSegment(child.getName());
             }
@@ -1180,13 +1183,13 @@ public class FileBridgeRepository {
         // set object info of the the object
         if (context.isObjectInfoRequired()) {
             compileObjectData(context, file, null, false, false, userReadOnly,
-                    objectInfos, null, null, null);
+                    objectInfos);
         }
 
         // get parent folder
         File parent = file.getParentFile();
         ObjectData object = compileObjectData(context, parent,
-                filterCollection, iaa, false, userReadOnly, objectInfos, null, null, null);
+                filterCollection, iaa, false, userReadOnly, objectInfos);
 
         ObjectParentDataImpl result = new ObjectParentDataImpl();
         result.setObject(object);
@@ -1229,7 +1232,7 @@ public class FileBridgeRepository {
         }
 
         return compileObjectData(context, file, filterCollection,
-                includeAllowableActions, includeACL, userReadOnly, objectInfos, null, null, null);
+                includeAllowableActions, includeACL, userReadOnly, objectInfos);
     }
 
     /**
@@ -1319,7 +1322,7 @@ public class FileBridgeRepository {
 
             // build and add child object
             ObjectData object = compileObjectData(context, hit, null, iaa,
-                    false, userReadOnly, objectInfos, null, null, null);
+                    false, userReadOnly, objectInfos);
 
             // set query names
             for (PropertyData<?> prop : object.getProperties()
@@ -1345,19 +1348,11 @@ public class FileBridgeRepository {
     private ObjectData compileObjectData(CallContext context, File file,
                                          Set<String> filter, boolean includeAllowableActions,
                                          boolean includeAcl, boolean userReadOnly,
-                                         ObjectInfoHandler objectInfos,
-                                         Ead2002Metadata ead2002Metadata,
-                                         DublinCore20021212Metadata dublinCore20021212Metadata,
-                                         KeyValueMetadata keyValueMetadata) {
+                                         ObjectInfoHandler objectInfos) {
         ObjectDataImpl result = new ObjectDataImpl();
         ObjectInfoImpl objectInfo = new ObjectInfoImpl();
 
-        if (ead2002Metadata == null) { ead2002Metadata = new Ead2002Metadata(); }
-        if (dublinCore20021212Metadata == null) { dublinCore20021212Metadata = new DublinCore20021212Metadata(); }
-        if (keyValueMetadata == null) { keyValueMetadata = new KeyValueMetadata(); }
-
-        result.setProperties(compileProperties(context, file, filter, objectInfo,
-                ead2002Metadata, dublinCore20021212Metadata, keyValueMetadata));
+        result.setProperties(compileProperties(context, file, filter, objectInfo));
 
         if (includeAllowableActions) {
             result.setAllowableActions(compileAllowableActions(file,
@@ -1380,10 +1375,7 @@ public class FileBridgeRepository {
     /**
      * Gathers all base properties of a file or folder.
      */
-    private Properties compileProperties(CallContext context, File file, Set<String> orgfilter, ObjectInfoImpl objectInfo,
-                                         Ead2002Metadata ead2002Metadata,
-                                         DublinCore20021212Metadata dublinCore20021212Metadata,
-                                         KeyValueMetadata keyValueMetadata) {
+    private Properties compileProperties(CallContext context, File file, Set<String> orgfilter, ObjectInfoImpl objectInfo) {
         if (file == null) {
             throw new IllegalArgumentException("File must not be null!");
         }
@@ -1518,71 +1510,141 @@ public class FileBridgeRepository {
                         PropertyIds.OBJECT_TYPE_ID,
                         FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value()); //BaseTypeId.CMIS_DOCUMENT.value());
 
-                // load EAD metadata into RODA Document properties
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(), ead2002Metadata.getUnitId());
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(), ead2002Metadata.getUnitTitle());
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_APPRAISAL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCRUALS.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value(), "<value to be loaded>");
+                // load file's metadata from the AIP
+                String aipMetadataId = null;
+                if ((file.getPath().split("aip/")[1] != null) && (file.getPath().split("aip/")[1].split("/")[0] != null)) {
+                    aipMetadataId = file.getPath().split("aip/")[1].split("/")[0];
+                }
 
-                // load Dublin Core metadata into RODA Document properties
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value(), "<value to be loaded>");
+                if ((aipMetadataId != null) && aipMetadataMap.containsKey(aipMetadataId)) {
+                    AipMetadata aipMetadata = aipMetadataMap.get(aipMetadataId);
 
-                // load Key-Value metadata into RODA Document properties
-                addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value(), "<value to be loaded>");
-                addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(), "<value to be loaded>");
+                    // load EAD metadata into RODA Document properties
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(),
+                            aipMetadata.getEad2002Metadata().getUnitId());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(),
+                            aipMetadata.getEad2002Metadata().getUnitTitle());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value(),
+                            aipMetadata.getEad2002Metadata().getCountryCode());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value(),
+                            aipMetadata.getEad2002Metadata().getRepositoryCode());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDate());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDateLabel());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDateNormal());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescription());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionExtent());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionDimensions());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionAppearance());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value(),
+                            aipMetadata.getEad2002Metadata().getRepositoryName());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value(),
+                            aipMetadata.getEad2002Metadata().getLangMaterial());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value(),
+                            aipMetadata.getEad2002Metadata().getLangMaterialLanguage());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getNoteSourcesDescription());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value(),
+                            aipMetadata.getEad2002Metadata().getNoteGeneralNote());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION.value(),
+                            aipMetadata.getEad2002Metadata().getOrigination());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginationCreator());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginationProducer());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getArchiveDescription());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value(),
+                            aipMetadata.getEad2002Metadata().getMaterialSpecification());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value(),
+                            aipMetadata.getEad2002Metadata().getOddLevelOfDetail());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getOddStatusDescription());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value(),
+                            aipMetadata.getEad2002Metadata().getScopeContent());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value(),
+                            aipMetadata.getEad2002Metadata().getArrangement());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_APPRAISAL.value(),
+                            aipMetadata.getEad2002Metadata().getAppraisal());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value(),
+                            aipMetadata.getEad2002Metadata().getAcquisitionInfo());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCRUALS.value(),
+                            aipMetadata.getEad2002Metadata().getAccruals());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value(),
+                            aipMetadata.getEad2002Metadata().getCustodialHistory());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
+                            aipMetadata.getEad2002Metadata().getProcessInfoDate());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
+                            aipMetadata.getEad2002Metadata().getProcessInfoArchivistNotes());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginalsLocation());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value(),
+                            aipMetadata.getEad2002Metadata().getAlternativeFormAvailable());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value(),
+                            aipMetadata.getEad2002Metadata().getRelatedMaterial());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value(),
+                            aipMetadata.getEad2002Metadata().getAccessRestrictions());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value(),
+                            aipMetadata.getEad2002Metadata().getUseRestrictions());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value(),
+                            aipMetadata.getEad2002Metadata().getOtherFindAid());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalTech());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value(),
+                            aipMetadata.getEad2002Metadata().getBibliography());
+                    addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value(),
+                            aipMetadata.getEad2002Metadata().getPreferCite());
+
+                    // load Dublin Core metadata into RODA Document properties
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getTitle());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getIdentifier());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getCreator());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getInitialDate());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getFinalDate());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getDescription());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getPublisher());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getContributor());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getRights());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getLanguage());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getCoverage());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getFormat());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getRelation());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getSubject());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getType());
+                    addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getSource());
+
+                    // load Key-Value metadata into RODA Document properties
+                    addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value(),
+                            aipMetadata.getKeyValueMetadata().getId());
+                    addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value(),
+                            aipMetadata.getKeyValueMetadata().getTitle());
+                    addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value(),
+                            aipMetadata.getKeyValueMetadata().getProducer());
+                    addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
+                            aipMetadata.getKeyValueMetadata().getDate());
+                }
 
                 // file properties
                 addPropertyBoolean(result, typeId, filter,
