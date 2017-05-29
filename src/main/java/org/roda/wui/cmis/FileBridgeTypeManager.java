@@ -40,7 +40,7 @@ public class FileBridgeTypeManager {
         typeDefinitionFactory.setDefaultNamespace(NAMESPACE);
         typeDefinitionFactory.setDefaultControllableAcl(false);
         typeDefinitionFactory.setDefaultControllablePolicy(false);
-        typeDefinitionFactory.setDefaultQueryable(false);
+        typeDefinitionFactory.setDefaultQueryable(true);
         typeDefinitionFactory.setDefaultFulltextIndexed(false);
         typeDefinitionFactory.setDefaultTypeMutability(typeDefinitionFactory.createTypeMutability(false, false, false));
 

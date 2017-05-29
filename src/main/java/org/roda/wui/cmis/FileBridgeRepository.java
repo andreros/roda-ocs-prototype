@@ -19,12 +19,11 @@ import org.roda.wui.cmis.enums.MetadataDublinCoreFieldId;
 import org.roda.wui.cmis.enums.MetadataEadFieldId;
 import org.roda.wui.cmis.enums.MetadataKeyValueFieldId;
 import org.roda.wui.cmis.metadata.AipMetadata;
+import org.roda.wui.cmis.query.FileBridgeQuery;
 
 import java.io.*;
 import java.math.BigInteger;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Implements all repository operations.
@@ -40,9 +39,6 @@ public class FileBridgeRepository {
     private static final String CMIS_ALL = "cmis:all";
 
     private static final int BUFFER_SIZE = 64 * 1024;
-
-    private static final Pattern IN_FOLDER_QUERY_PATTERN = Pattern
-            .compile("(?i)select\\s+.+\\s+from\\s+(\\S*).*\\s+where\\s+in_folder\\('(.*)'\\)");
 
     /**
      * Repository id.
@@ -942,99 +938,133 @@ public class FileBridgeRepository {
 
             String relativePath = child.getPath().replace(root.getPath()+"/", "");
             int pathLength = relativePath.split("/").length;
-            Boolean canReadAIP = false;
 
-            //**********************************************************
-            //we are in the AIPs "<guid>" root folder, iterate the direct children
-            for (File firstLevelChild : child.listFiles()) {
-                // skip hidden files, for example '.DS_Store'
-                if (firstLevelChild.isHidden()) { continue; }
-
-                String firstLevelRelativePath = firstLevelChild.getPath().replace(root.getPath()+"/", "");
-                String[] firstLevelPathElements = firstLevelRelativePath.split("/");
+            if (pathLength == 1) {
+                //**********************************************************
+                // WE ARE READING THE AIP INITIAL FOLDER
+                //**********************************************************
+                Boolean canReadAIP = false;
 
                 //**********************************************************
-                // Check the "aip.json" file for AIP read permissions
-                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("aip.json"))) {
-                    canReadAIP = FileBridgeUtils.canReadAIP(firstLevelChild.getPath());
+                //we are in the AIPs "<guid>" root folder, iterate the direct children
+                for (File firstLevelChild : child.listFiles()) {
+                    // skip hidden files, for example '.DS_Store'
+                    if (firstLevelChild.isHidden()) { continue; }
+
+                    String firstLevelRelativePath = firstLevelChild.getPath().replace(root.getPath()+"/", "");
+                    String[] firstLevelPathElements = firstLevelRelativePath.split("/");
 
                     //**********************************************************
-                    // Load the AIP metadata files
-                    if (canReadAIP) {
-                        AipMetadata aipMetadata = new AipMetadata(relativePath.split("/")[0]);
-                        aipMetadata.setEad2002Metadata(FileBridgeUtils.getEAD2002Metadata(firstLevelChild.getPath()));
-                        aipMetadata.setDublinCore20021212Metadata(FileBridgeUtils.getDublinCore20021212Metadata(firstLevelChild.getPath()));
-                        aipMetadata.setKeyValueMetadata(FileBridgeUtils.getKeyValueMetadata(firstLevelChild.getPath()));
-
-                        System.out.println(aipMetadata.getEad2002Metadata().toString());
-                        System.out.println(aipMetadata.getDublinCore20021212Metadata().toString());
-                        System.out.println(aipMetadata.getKeyValueMetadata().toString());
-
-                        //store the AIPs read metadata
-                        if (!aipMetadataMap.containsKey(aipMetadata.getId())) {
-                            aipMetadataMap.put(aipMetadata.getId(), aipMetadata);
-                        }
-
-                    }
-                }
-
-                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadAIP) {
-                    //**********************************************************
-                    //we are in the "representations" folder, iterate the direct children
-                    for (File secondLevelChild : firstLevelChild.listFiles()) {
-                        // skip hidden files, for example '.DS_Store'
-                        if (secondLevelChild.isHidden()) { continue; }
+                    // Check the "aip.json" file for AIP read permissions
+                    if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("aip.json"))) {
+                        canReadAIP = FileBridgeUtils.canReadAIP(firstLevelChild.getPath());
 
                         //**********************************************************
-                        //we are in the "repX" folder, iterate the direct children
-                        for (File thirdLevelChild : secondLevelChild.listFiles()) {
-                            // skip hidden files, for example '.DS_Store'
-                            if (thirdLevelChild.isHidden()) { continue; }
+                        // Load the AIP metadata files
+                        if (canReadAIP) {
+                            AipMetadata aipMetadata = new AipMetadata(relativePath.split("/")[0]);
+                            aipMetadata.setEad2002Metadata(FileBridgeUtils.getEAD2002Metadata(firstLevelChild.getPath()));
+                            aipMetadata.setDublinCore20021212Metadata(FileBridgeUtils.getDublinCore20021212Metadata(firstLevelChild.getPath()));
+                            aipMetadata.setKeyValueMetadata(FileBridgeUtils.getKeyValueMetadata(firstLevelChild.getPath()));
 
-                            String thirdLevelRelativePath = thirdLevelChild.getPath().replace(root.getPath()+"/", "");
-                            String[] thirdLevelPathElements = thirdLevelRelativePath.split("/");
+                            //System.out.println(aipMetadata.getEad2002Metadata().toString());
+                            //System.out.println(aipMetadata.getDublinCore20021212Metadata().toString());
+                            //System.out.println(aipMetadata.getKeyValueMetadata().toString());
 
-                            if ((thirdLevelPathElements.length == 4) && (thirdLevelPathElements[3].equals("data"))) {
-                                //**********************************************************
-                                //we are in the "repX/data" folder, iterate the direct children
-                                //these are the files we are exposing through the CMIS server
-                                for (File fourthLevelChild : thirdLevelChild.listFiles()) {
-                                    // skip hidden files, for example '.DS_Store'
-                                    if (fourthLevelChild.isHidden()) { continue; }
-
-                                    count++;
-
-                                    if (skip > 0) {
-                                        skip--;
-                                        continue;
-                                    }
-
-                                    if (result.getObjects().size() >= max) {
-                                        result.setHasMoreItems(true);
-                                        continue;
-                                    }
-
-                                    ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
-                                    objectInFolder.setObject(compileObjectData(context, fourthLevelChild,
-                                            filterCollection, iaa, false, userReadOnly, objectInfos));
-                                    if (ips) { objectInFolder.setPathSegment(fourthLevelChild.getName()); }
-
-                                    result.getObjects().add(objectInFolder);
-
-                                }
-                                //END "repX/data" folder
-                                //**********************************************************
+                            //store the AIPs read metadata
+                            if (!aipMetadataMap.containsKey(aipMetadata.getId())) {
+                                aipMetadataMap.put(aipMetadata.getId(), aipMetadata);
                             }
                         }
-                        //END "rep1, rep2" folder
+                    }
+
+                    if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadAIP) {
+                        //**********************************************************
+                        //we are in the "representations" folder, iterate the direct children
+                        for (File secondLevelChild : firstLevelChild.listFiles()) {
+                            // skip hidden files, for example '.DS_Store'
+                            if (secondLevelChild.isHidden()) { continue; }
+
+                            //**********************************************************
+                            //we are in the "repX" folder, iterate the direct children
+                            for (File thirdLevelChild : secondLevelChild.listFiles()) {
+                                // skip hidden files, for example '.DS_Store'
+                                if (thirdLevelChild.isHidden()) { continue; }
+
+                                String thirdLevelRelativePath = thirdLevelChild.getPath().replace(root.getPath()+"/", "");
+                                String[] thirdLevelPathElements = thirdLevelRelativePath.split("/");
+
+                                if ((thirdLevelPathElements.length == 4) && (thirdLevelPathElements[3].equals("data"))) {
+                                    //**********************************************************
+                                    //we are in the "repX/data" folder, iterate the direct children
+                                    //these are the files we are exposing through the CMIS server
+                                    for (File fourthLevelChild : thirdLevelChild.listFiles()) {
+                                        // skip hidden files, for example '.DS_Store'
+                                        if (fourthLevelChild.isHidden()) { continue; }
+
+                                        count++;
+
+                                        if (skip > 0) {
+                                            skip--;
+                                            continue;
+                                        }
+
+                                        if (result.getObjects().size() >= max) {
+                                            result.setHasMoreItems(true);
+                                            continue;
+                                        }
+
+                                        ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
+                                        objectInFolder.setObject(compileObjectData(context, fourthLevelChild,
+                                                filterCollection, iaa, false, userReadOnly, objectInfos));
+                                        if (ips) { objectInFolder.setPathSegment(fourthLevelChild.getName()); }
+
+                                        result.getObjects().add(objectInFolder);
+
+                                    }
+                                    //END "repX/data" folder
+                                    //**********************************************************
+                                }
+                            }
+                            //END "rep1, rep2" folder
+                            //**********************************************************
+                        }
+                        //END "representations" folder
                         //**********************************************************
                     }
-                    //END "representations" folder
-                    //**********************************************************
                 }
+                //END AIP root folder
+                //**********************************************************
+            } else if (pathLength > 1 && pathLength < 6) {
+                //*********************************************************************
+                // WE ARE IN BETWEEN DIRECTORIES WE DO NOT WANT TO BE ABLE TO BROWSE
+                //*********************************************************************
+
+                return this.getChildren(context, ROOT_ID, filter, includeAllowableActions, includePathSegment, maxItems, skipCount, objectInfos);
+
+            } else {
+                //*********************************************************************
+                // WE ARE ALREADY INSIDE THE AIP, SO WE HAVE PERMISSIONS TO BE THERE ;)
+                //*********************************************************************
+                count++;
+
+                if (skip > 0) {
+                    skip--;
+                    continue;
+                }
+
+                if (result.getObjects().size() >= max) {
+                    result.setHasMoreItems(true);
+                    continue;
+                }
+
+                ObjectInFolderDataImpl objectInFolder = new ObjectInFolderDataImpl();
+                objectInFolder.setObject(compileObjectData(context, child,
+                        filterCollection, iaa, false, userReadOnly, objectInfos));
+                if (ips) { objectInFolder.setPathSegment(child.getName()); }
+
+                result.getObjects().add(objectInFolder);
             }
-            //END AIP root folder
-            //**********************************************************
 
             //END - AIP FILE BRIDGE
             //************************************************************************************
@@ -1243,47 +1273,39 @@ public class FileBridgeRepository {
                             BigInteger skipCount, ObjectInfoHandler objectInfos) {
         boolean userReadOnly = checkUser(context, false);
 
-        Matcher matcher = IN_FOLDER_QUERY_PATTERN.matcher(statement.trim());
+        // get the base folder
+        File folder = getFile(ROOT_ID);
 
-        if (!matcher.matches()) {
-            throw new CmisInvalidArgumentException(
-                    "Invalid or unsupported query.");
+        //get the parsed query object
+        FileBridgeQuery fileBridgeQuery = new FileBridgeQuery(statement);
+        if (fileBridgeQuery.getQueryType() == null) {
+            throw new CmisInvalidArgumentException("Invalid or unsupported query.");
+        } else if (fileBridgeQuery.getQueryType().equals("IN_FOLDER")) {
+            if (fileBridgeQuery.getFolderId().length() == 0) {
+                throw new CmisInvalidArgumentException("Invalid folder id.");
+            }
+            folder = getFile(fileBridgeQuery.getFolderId());
+            if (!folder.isDirectory()) {
+                throw new CmisInvalidArgumentException("Not a folder!");
+            }
         }
 
-        String typeId = matcher.group(1);
-        String folderId = matcher.group(2);
-
-        TypeDefinition type = typeManager.getInternalTypeDefinition(typeId);
+        TypeDefinition type = typeManager.getInternalTypeDefinition(fileBridgeQuery.getTypeId());
         if (type == null) {
             throw new CmisInvalidArgumentException("Unknown type.");
         }
 
         boolean queryFiles = (type.getBaseTypeId() == BaseTypeId.CMIS_DOCUMENT);
 
-        if (folderId.length() == 0) {
-            throw new CmisInvalidArgumentException("Invalid folder id.");
-        }
-
         // set defaults if values not set
-        boolean iaa = FileBridgeUtils.getBooleanParameter(
-                includeAllowableActions, false);
+        boolean iaa = FileBridgeUtils.getBooleanParameter(includeAllowableActions, false);
 
         // skip and max
         int skip = (skipCount == null ? 0 : skipCount.intValue());
-        if (skip < 0) {
-            skip = 0;
-        }
+        if (skip < 0) { skip = 0; }
 
         int max = (maxItems == null ? Integer.MAX_VALUE : maxItems.intValue());
-        if (max < 0) {
-            max = Integer.MAX_VALUE;
-        }
-
-        // get the folder
-        File folder = getFile(folderId);
-        if (!folder.isDirectory()) {
-            throw new CmisInvalidArgumentException("Not a folder!");
-        }
+        if (max < 0) { max = Integer.MAX_VALUE; }
 
         // prepare result
         ObjectListImpl result = new ObjectListImpl();
@@ -1293,46 +1315,147 @@ public class FileBridgeRepository {
 
         // iterate through children
         for (File hit : folder.listFiles()) {
-            // skip hidden files
-            if (hit.isHidden()) {
-                continue;
+
+            // skip hidden files, for example '.DS_Store'
+            if (hit.isHidden()) { continue; }
+
+            //************************************************************************************
+            //BEGIN - AIP FILE BRIDGE
+
+            String relativePath = hit.getPath().replace(root.getPath()+"/", "");
+            int pathLength = relativePath.split("/").length;
+
+            //**********************************************************
+            // WE ARE READING THE AIP INITIAL FOLDER
+            //**********************************************************
+            Boolean canReadAIP = false;
+
+            //**********************************************************
+            //we are in the AIPs "<guid>" root folder, iterate the direct children
+            for (File firstLevelChild : hit.listFiles()) {
+                // skip hidden files, for example '.DS_Store'
+                if (firstLevelChild.isHidden()) { continue; }
+
+                String firstLevelRelativePath = firstLevelChild.getPath().replace(root.getPath()+"/", "");
+                String[] firstLevelPathElements = firstLevelRelativePath.split("/");
+
+                //**********************************************************
+                // Check the "aip.json" file for AIP read permissions
+                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("aip.json"))) {
+                    canReadAIP = FileBridgeUtils.canReadAIP(firstLevelChild.getPath());
+                }
+
+                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadAIP) {
+                    //**********************************************************
+                    //we are in the "representations" folder, iterate the direct children
+                    for (File secondLevelChild : firstLevelChild.listFiles()) {
+                        // skip hidden files, for example '.DS_Store'
+                        if (secondLevelChild.isHidden()) { continue; }
+
+                        //**********************************************************
+                        //we are in the "repX" folder, iterate the direct children
+                        for (File thirdLevelChild : secondLevelChild.listFiles()) {
+                            // skip hidden files, for example '.DS_Store'
+                            if (thirdLevelChild.isHidden()) { continue; }
+
+                            String thirdLevelRelativePath = thirdLevelChild.getPath().replace(root.getPath()+"/", "");
+                            String[] thirdLevelPathElements = thirdLevelRelativePath.split("/");
+
+                            if ((thirdLevelPathElements.length == 4) && (thirdLevelPathElements[3].equals("data"))) {
+                                //**********************************************************
+                                //we are in the "repX/data" folder, iterate the direct children
+                                //these are the files we are exposing through the CMIS server
+                                for (File fourthLevelChild : thirdLevelChild.listFiles()) {
+                                    // skip hidden files, for example '.DS_Store'
+                                    if (fourthLevelChild.isHidden()) { continue; }
+
+                                    // skip directory if documents are requested
+                                    if (fourthLevelChild.isDirectory() && queryFiles) { continue; }
+
+                                    // skip files if folders are requested
+                                    if (fourthLevelChild.isFile() && !queryFiles) { continue; }
+
+                                    count++;
+
+                                    if (skip > 0) { skip--; continue; }
+
+                                    if (result.getObjects().size() >= max) { result.setHasMoreItems(true); continue; }
+
+                                    // build and add child object
+                                    ObjectData object = compileObjectData(context, fourthLevelChild, null, iaa, false, userReadOnly, objectInfos);
+                                    boolean isMatch = false;
+
+                                    // set query names
+                                    for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
+
+                                        //all fields selected - try to extract as many properties / fields as possible from the current object type
+                                        if (fileBridgeQuery.searchAllFields()) {
+                                            if (type.getPropertyDefinitions().get(prop.getId()) != null) {
+                                                ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
+                                                if (fileBridgeQuery.hasWhereConditions()) {
+                                                    Object value = null;
+                                                    if (!((MutablePropertyData<?>) prop).getValues().isEmpty()) {
+                                                        value = ((MutablePropertyData<?>) prop).getValues().get(0);
+                                                    }
+                                                    isMatch = fileBridgeQuery.isWhereMatch(type.getPropertyDefinitions().get(prop.getId()).getQueryName(),
+                                                            value);
+                                                    if (isMatch) break;
+                                                } else {
+                                                    isMatch = true;
+                                                }
+                                            }
+                                        }
+                                        //specific fields selected - extract only the selected properties / fields from the current object type
+                                        else {
+                                            String[] fieldsArray = fileBridgeQuery.getFieldsArray();
+
+                                            if ((type.getPropertyDefinitions().get(prop.getId()) != null)) {
+                                                //only include the requested fields
+                                                for (int i = 0; i < fieldsArray.length; i++) {
+
+                                                    if (type.getPropertyDefinitions().get(prop.getId()).getQueryName().equals(fieldsArray[i])) {
+                                                        ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
+
+                                                        if (fileBridgeQuery.hasWhereConditions()) {
+                                                            Object value = null;
+                                                            if (!((MutablePropertyData<?>) prop).getValues().isEmpty()) {
+                                                                value = ((MutablePropertyData<?>) prop).getValues().get(0);
+                                                            }
+                                                            if (!isMatch) isMatch = fileBridgeQuery.isWhereMatch(
+                                                                    type.getPropertyDefinitions().get(prop.getId()).getQueryName(),
+                                                                    value);
+                                                        } else {
+                                                            isMatch = true;
+                                                        }
+
+                                                    }
+
+                                                }
+                                            }
+
+                                        }
+
+                                    }
+
+                                    if (isMatch) result.getObjects().add(object);
+                                }
+                                //END "repX/data" folder
+                                //**********************************************************
+                            }
+                        }
+                        //END "rep1, rep2" folder
+                        //**********************************************************
+                    }
+                    //END "representations" folder
+                    //**********************************************************
+                }
             }
+            //END AIP root folder
+            //**********************************************************
 
-            // skip directory if documents are requested
-            if (hit.isDirectory() && queryFiles) {
-                continue;
-            }
+            //END - AIP FILE BRIDGE
+            //************************************************************************************
 
-            // skip files if folders are requested
-            if (hit.isFile() && !queryFiles) {
-                continue;
-            }
-
-            count++;
-
-            if (skip > 0) {
-                skip--;
-                continue;
-            }
-
-            if (result.getObjects().size() >= max) {
-                result.setHasMoreItems(true);
-                continue;
-            }
-
-            // build and add child object
-            ObjectData object = compileObjectData(context, hit, null, iaa,
-                    false, userReadOnly, objectInfos);
-
-            // set query names
-            for (PropertyData<?> prop : object.getProperties()
-                    .getPropertyList()) {
-                ((MutablePropertyData<?>) prop).setQueryName(type
-                        .getPropertyDefinitions().get(prop.getId())
-                        .getQueryName());
-            }
-
-            result.getObjects().add(object);
         }
 
         result.setNumItems(BigInteger.valueOf(count));
