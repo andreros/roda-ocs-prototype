@@ -3,6 +3,8 @@ package org.roda.wui.cmis.database;
 import org.sqlite.SQLiteException;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Class responsible for interacting with the database.
@@ -270,6 +272,50 @@ public class Database {
         } catch (SQLException e) {
             System.err.println(e.getClass().getName() + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Function responsible for running a query against the objects database and retrieving a list of matching results.
+     * @param statement The SQL statement.
+     * @return The list of matching results.
+     */
+    public List<String> query(String statement) {
+        if (statement == null) { System.err.println("Missing parameter 'statement' for the Database.query method."); return null; }
+
+        List<String> objects = new ArrayList<>();
+
+        // query preparation
+        statement = statement.replace("[cmis:folder]", "cmis:folder").replace("cmis:folder", "[cmis:folder]");
+        statement = statement.replace("[cmis:document]", "cmis:document").replace("cmis:document", "[cmis:rodaDocument]");
+        statement = statement.replace("[cmis:rodaDocument]", "cmis:rodaDocument").replace("cmis:rodaDocument", "[cmis:rodaDocument]");
+        statement = statement.replaceAll("(?i)SELECT", "SELECT [cmis:objectId],");
+
+        Statement stmt;
+        try {
+            this.connect();
+            stmt = this.connection.createStatement();
+
+            //execute query
+            try {
+                stmt.executeUpdate(statement);
+                ResultSet rs = stmt.executeQuery(statement);
+                while ( rs.next() ) {
+                    String cmisObjectId = rs.getString("cmis:objectId");
+                    objects.add(cmisObjectId);
+                }
+                rs.close();
+            } catch (SQLiteException e) {
+                System.err.println(e.getClass().getName() + ": " + e.getMessage());
+            }
+
+            stmt.close();
+            this.connection.close();
+
+        } catch (SQLException e) {
+            System.err.println(e.getClass().getName() + ": " + e.getMessage());
+        }
+
+        return objects;
     }
 
 }
