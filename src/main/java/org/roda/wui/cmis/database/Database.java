@@ -94,7 +94,7 @@ public class Database {
                 " [cmis:secondaryObjectTypeIds] VARCHAR(500), " +
                 " [cmis:baseTypeId] VARCHAR(500), " +
                 " [cmis:objectTypeId] VARCHAR(500), " +
-                " [cmis:path] VARCHAR(500), " +
+                " [cmis:path] VARCHAR(5000), " +
                 " [cmis:parentId] VARCHAR(500), " +
                 " [cmis:allowedChildObjectTypeIds] VARCHAR(500)" +
                 ")";
@@ -121,6 +121,7 @@ public class Database {
                 " [cmis:secondaryObjectTypeIds] VARCHAR(500), " +
                 " [cmis:baseTypeId] VARCHAR(500), " +
                 " [cmis:objectTypeId] VARCHAR(500), " +
+                " [cmis:path] VARCHAR(5000), " +
                 " [cmis:isImmutable] VARCHAR(500), " +
                 " [cmis:isLatestVersion] VARCHAR(500), " +
                 " [cmis:isMajorVersion] VARCHAR(500), " +
