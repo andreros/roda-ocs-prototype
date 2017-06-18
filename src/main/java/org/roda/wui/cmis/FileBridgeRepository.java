@@ -20,7 +20,7 @@ import org.roda.wui.cmis.enums.MetadataDublinCoreFieldId;
 import org.roda.wui.cmis.enums.MetadataEadFieldId;
 import org.roda.wui.cmis.enums.MetadataKeyValueFieldId;
 import org.roda.wui.cmis.metadata.AipMetadata;
-import org.roda.wui.cmis.database.FileBridgeQuery;
+import org.roda.wui.cmis.database.Query;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -391,20 +391,20 @@ public class FileBridgeRepository {
         File folder = getFile(ROOT_ID);
 
         //get the parsed query object
-        FileBridgeQuery fileBridgeQuery = new FileBridgeQuery(statement);
-        if (fileBridgeQuery.getQueryType() == null) {
+        Query query = new Query(statement);
+        if (query.getQueryType() == null) {
             throw new CmisInvalidArgumentException("Invalid or unsupported query.");
-        } else if (fileBridgeQuery.getQueryType().equals("IN_FOLDER")) {
-            if (fileBridgeQuery.getFolderId().length() == 0) {
+        } else if (query.getQueryType().equals("IN_FOLDER")) {
+            if (query.getFolderId().length() == 0) {
                 throw new CmisInvalidArgumentException("Invalid folder id.");
             }
-            folder = getFile(fileBridgeQuery.getFolderId());
+            folder = getFile(query.getFolderId());
             if (!folder.isDirectory()) {
                 throw new CmisInvalidArgumentException("Not a folder!");
             }
         }
 
-        TypeDefinition type = typeManager.getInternalTypeDefinition(fileBridgeQuery.getTypeId());
+        TypeDefinition type = typeManager.getInternalTypeDefinition(query.getTypeId());
         if (type == null) {
             throw new CmisInvalidArgumentException("Unknown type.");
         }
@@ -503,15 +503,15 @@ public class FileBridgeRepository {
                                     for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
 
                                         //all fields selected - try to extract as many properties / fields as possible from the current object type
-                                        if (fileBridgeQuery.searchAllFields()) {
+                                        if (query.searchAllFields()) {
                                             if (type.getPropertyDefinitions().get(prop.getId()) != null) {
                                                 ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
-                                                if (fileBridgeQuery.hasWhereConditions()) {
+                                                if (query.hasWhereConditions()) {
                                                     Object value = null;
                                                     if (!((MutablePropertyData<?>) prop).getValues().isEmpty()) {
                                                         value = ((MutablePropertyData<?>) prop).getValues().get(0);
                                                     }
-                                                    isMatch = fileBridgeQuery.isWhereMatch(type.getPropertyDefinitions().get(prop.getId()).getQueryName(),
+                                                    isMatch = query.isWhereMatch(type.getPropertyDefinitions().get(prop.getId()).getQueryName(),
                                                             value);
                                                     if (isMatch) break;
                                                 } else {
@@ -521,7 +521,7 @@ public class FileBridgeRepository {
                                         }
                                         //specific fields selected - extract only the selected properties / fields from the current object type
                                         else {
-                                            String[] fieldsArray = fileBridgeQuery.getFieldsArray();
+                                            String[] fieldsArray = query.getFieldsArray();
 
                                             if ((type.getPropertyDefinitions().get(prop.getId()) != null)) {
                                                 //only include the requested fields
@@ -530,12 +530,12 @@ public class FileBridgeRepository {
                                                     if (type.getPropertyDefinitions().get(prop.getId()).getQueryName().equals(fieldsArray[i])) {
                                                         ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
 
-                                                        if (fileBridgeQuery.hasWhereConditions()) {
+                                                        if (query.hasWhereConditions()) {
                                                             Object value = null;
                                                             if (!((MutablePropertyData<?>) prop).getValues().isEmpty()) {
                                                                 value = ((MutablePropertyData<?>) prop).getValues().get(0);
                                                             }
-                                                            if (!isMatch) isMatch = fileBridgeQuery.isWhereMatch(
+                                                            if (!isMatch) isMatch = query.isWhereMatch(
                                                                     type.getPropertyDefinitions().get(prop.getId()).getQueryName(),
                                                                     value);
                                                         } else {

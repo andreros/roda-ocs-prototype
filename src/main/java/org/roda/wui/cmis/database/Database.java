@@ -32,9 +32,9 @@ public class Database {
     private Connection connection = null;
 
     /**
-     * FileBridgeQuery query parser.
+     * Query parser.
      */
-    private FileBridgeQuery query = null;
+    private Query queryParser = null;
 
     /**
      * Constructor.
@@ -288,19 +288,19 @@ public class Database {
     public List<String> query(String statement) {
         if (statement == null) { System.err.println("Missing parameter 'statement' for the Database.query method."); return null; }
 
-        query = new FileBridgeQuery(statement);
+        queryParser = new Query(statement);
 
         List<String> objects = new ArrayList<>();
 
         // query preparation
 
         // SELECT fields
-        if (!query.searchAllFields()) {
+        if (!queryParser.searchAllFields()) {
             String fieldsClause = "";
-            for (String field : query.getFieldsArray()) {
+            for (String field : queryParser.getFieldsArray()) {
                 fieldsClause += "[" + field + "], ";
             }
-            statement = statement.replaceAll("(?i)SELECT " + query.getFieldsClause(), "SELECT " + fieldsClause + "[cmis:path]");
+            statement = statement.replaceAll("(?i)SELECT " + queryParser.getFieldsClause(), "SELECT " + fieldsClause + "[cmis:path]");
         }
 
         // FROM table
@@ -309,8 +309,8 @@ public class Database {
         statement = statement.replace("[cmis:rodaDocument]", "cmis:rodaDocument").replace("cmis:rodaDocument", "[cmis:rodaDocument]");
 
         // WHERE fields
-        if (query.getQueryType().equals("WHERE")) {
-            String whereClause = query.getWhereClause();
+        if (queryParser.getQueryType().equals("WHERE")) {
+            String whereClause = queryParser.getWhereClause();
             String[] whereTokens = whereClause.split(" ");
             String resultWhereClause = "";
             for (String token : whereTokens) {
@@ -324,7 +324,7 @@ public class Database {
         }
 
         // IN_FOLDER
-        if (query.getQueryType().equals("IN_FOLDER")) {
+        if (queryParser.getQueryType().equals("IN_FOLDER")) {
 
         }
 
@@ -360,6 +360,6 @@ public class Database {
      * Function responsible for returning the query parse with the last executed query.
      * @return The FileBridgeQuery query parser.
      */
-    public FileBridgeQuery getLastQuery() { return query; }
+    public Query getLastQuery() { return queryParser; }
 
 }

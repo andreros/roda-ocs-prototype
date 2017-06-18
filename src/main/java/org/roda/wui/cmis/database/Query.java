@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 /**
  * Class responsible for holding a query.
  */
-public class FileBridgeQuery {
+public class Query {
 
     //Query statement
     private String statement = "";
@@ -39,7 +39,7 @@ public class FileBridgeQuery {
      * Contructor.
      * @param statement The query's statement.
      */
-    public FileBridgeQuery(String statement) {
+    public Query(String statement) {
         this.statement = statement;
         this.parse(this.statement);
     }
