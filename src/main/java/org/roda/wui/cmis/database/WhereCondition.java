@@ -1,4 +1,4 @@
-package org.roda.wui.cmis.query;
+package org.roda.wui.cmis.database;
 
 /**
  * POJO class for representing a condition in a WHERE clause.

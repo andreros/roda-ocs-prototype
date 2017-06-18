@@ -20,7 +20,7 @@ import org.roda.wui.cmis.enums.MetadataDublinCoreFieldId;
 import org.roda.wui.cmis.enums.MetadataEadFieldId;
 import org.roda.wui.cmis.enums.MetadataKeyValueFieldId;
 import org.roda.wui.cmis.metadata.AipMetadata;
-import org.roda.wui.cmis.query.FileBridgeQuery;
+import org.roda.wui.cmis.database.FileBridgeQuery;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -585,22 +585,24 @@ public class FileBridgeRepository {
                             BigInteger skipCount, ObjectInfoHandler objectInfos) {
         boolean userReadOnly = checkUser(context, false);
 
+        //Query the objects database for results
+        List<String> objectPaths = database.query(statement);
+
         //get the parsed query object
-        FileBridgeQuery fileBridgeQuery = new FileBridgeQuery(statement);
-        if (fileBridgeQuery.getQueryType() == null) {
+        if (database.getLastQuery().getQueryType() == null) {
             throw new CmisInvalidArgumentException("Invalid or unsupported query.");
-        } else if (fileBridgeQuery.getQueryType().equals("IN_FOLDER")) {
-            if (fileBridgeQuery.getFolderId().length() == 0) {
+        } else if (database.getLastQuery().getQueryType().equals("IN_FOLDER")) {
+            if (database.getLastQuery().getFolderId().length() == 0) {
                 throw new CmisInvalidArgumentException("Invalid folder id.");
             }
-            File folder = getFile(fileBridgeQuery.getFolderId());
+            File folder = getFile(database.getLastQuery().getFolderId());
             if (!folder.isDirectory()) {
                 throw new CmisInvalidArgumentException("Not a folder!");
             }
         }
 
         //get the objects type from the query: cmis:folder / cmis:document / cmis:rodaDocument
-        TypeDefinition type = typeManager.getInternalTypeDefinition(fileBridgeQuery.getTypeId());
+        TypeDefinition type = typeManager.getInternalTypeDefinition(database.getLastQuery().getTypeId());
         if (type == null) { throw new CmisInvalidArgumentException("Unknown type."); }
 
         // set defaults if values not set
@@ -613,14 +615,13 @@ public class FileBridgeRepository {
         int max = (maxItems == null ? Integer.MAX_VALUE : maxItems.intValue());
         if (max < 0) { max = Integer.MAX_VALUE; }
 
-        //Query the objects database for results
-        List<String> objectPaths = this.database.query(statement);
-
         // prepare result
         ObjectListImpl result = new ObjectListImpl();
         result.setObjects(new ArrayList<ObjectData>());
         result.setHasMoreItems(false);
         int count = 0;
+
+        ArrayList<String> queryProperties = database.getLastQuery().getFieldsArrayList();
 
         //create objects straight from the database results
         for (String objectPath : objectPaths) {
@@ -635,10 +636,18 @@ public class FileBridgeRepository {
 
             // set query names
             for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
-                //try to extract as many properties / fields as possible from the current object type
-                //if a property is not present (the object type might not have it) do not include it
-                if (type.getPropertyDefinitions().get(prop.getId()) != null) {
-                    ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
+                if (database.getLastQuery().searchAllFields()) {
+                    //try to extract as many properties / fields as possible from the current object type
+                    //if a property is not present (the object type might not have it) do not include it
+                    if (type.getPropertyDefinitions().get(prop.getId()) != null) {
+                        ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
+                    }
+                } else {
+                    //extract only the properties requested in the query for the current object type
+                    //if a property is not present (the object type might not have it) do not include it
+                    if ((type.getPropertyDefinitions().get(prop.getId()) != null) && queryProperties.contains(prop.getId())) {
+                        ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
+                    }
                 }
             }
             result.getObjects().add(object);

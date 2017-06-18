@@ -32,6 +32,11 @@ public class Database {
     private Connection connection = null;
 
     /**
+     * FileBridgeQuery query parser.
+     */
+    private FileBridgeQuery query = null;
+
+    /**
      * Constructor.
      *
      * @param provider The database provider name.
@@ -283,13 +288,45 @@ public class Database {
     public List<String> query(String statement) {
         if (statement == null) { System.err.println("Missing parameter 'statement' for the Database.query method."); return null; }
 
+        query = new FileBridgeQuery(statement);
+
         List<String> objects = new ArrayList<>();
 
         // query preparation
+
+        // SELECT fields
+        if (!query.searchAllFields()) {
+            String fieldsClause = "";
+            for (String field : query.getFieldsArray()) {
+                fieldsClause += "[" + field + "], ";
+            }
+            statement = statement.replaceAll("(?i)SELECT " + query.getFieldsClause(), "SELECT " + fieldsClause + "[cmis:path]");
+        }
+
+        // FROM table
         statement = statement.replace("[cmis:folder]", "cmis:folder").replace("cmis:folder", "[cmis:folder]");
         statement = statement.replace("[cmis:document]", "cmis:document").replace("cmis:document", "[cmis:rodaDocument]");
         statement = statement.replace("[cmis:rodaDocument]", "cmis:rodaDocument").replace("cmis:rodaDocument", "[cmis:rodaDocument]");
-        statement = statement.replaceAll("(?i)SELECT", "SELECT [cmis:path],");
+
+        // WHERE fields
+        if (query.getQueryType().equals("WHERE")) {
+            String whereClause = query.getWhereClause();
+            String[] whereTokens = whereClause.split(" ");
+            String resultWhereClause = "";
+            for (String token : whereTokens) {
+                if (token.contains("cmis:") || token.contains("metadata:")) {
+                    resultWhereClause += "[" + token + "] ";
+                } else {
+                    resultWhereClause += token + " ";
+                }
+            }
+            statement = statement.replace(whereClause, resultWhereClause);
+        }
+
+        // IN_FOLDER
+        if (query.getQueryType().equals("IN_FOLDER")) {
+
+        }
 
         Statement stmt;
         try {
@@ -318,5 +355,11 @@ public class Database {
 
         return objects;
     }
+
+    /**
+     * Function responsible for returning the query parse with the last executed query.
+     * @return The FileBridgeQuery query parser.
+     */
+    public FileBridgeQuery getLastQuery() { return query; }
 
 }

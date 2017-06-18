@@ -1,4 +1,4 @@
-package org.roda.wui.cmis.query;
+package org.roda.wui.cmis.database;
 
 import org.apache.chemistry.opencmis.commons.PropertyIds;
 
@@ -34,11 +34,6 @@ public class FileBridgeQuery {
     private List<WhereCondition> whereOrConditions = new ArrayList<>();
 
     private String folderId = null;
-
-    /**
-     * Constructor.
-     */
-    public FileBridgeQuery() {}
 
     /**
      * Contructor.
@@ -180,16 +175,29 @@ public class FileBridgeQuery {
 
     public String[] getFieldsArray() {
         String fields = "";
-        if (this.fieldsClause != null) { fields = this.fieldsClause; }
+        if (fieldsClause != null) { fields = fieldsClause; }
         //always include these fields to facilitate results visualization
         if (!fields.contains(PropertyIds.OBJECT_ID)) fields = PropertyIds.OBJECT_ID + "," + fields;
         if (!fields.contains(PropertyIds.NAME)) fields = PropertyIds.NAME + "," + fields;
         return fields.replace(" ", "").split(",");
     }
 
+    public ArrayList<String> getFieldsArrayList() {
+        String[] fields = getFieldsArray();
+        ArrayList fieldsArrayList = new ArrayList();
+        for (String field : fields) {
+            if (!fieldsArrayList.contains(field)) {
+                fieldsArrayList.add(field);
+            }
+        }
+        return fieldsArrayList;
+    }
+
     public String getTypeId() {
         return typeId;
     }
+
+    public String getWhereClause() { return whereClause; }
 
     public String getFolderId() {
         return folderId;
