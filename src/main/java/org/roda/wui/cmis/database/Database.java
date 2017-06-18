@@ -289,7 +289,7 @@ public class Database {
         statement = statement.replace("[cmis:folder]", "cmis:folder").replace("cmis:folder", "[cmis:folder]");
         statement = statement.replace("[cmis:document]", "cmis:document").replace("cmis:document", "[cmis:rodaDocument]");
         statement = statement.replace("[cmis:rodaDocument]", "cmis:rodaDocument").replace("cmis:rodaDocument", "[cmis:rodaDocument]");
-        statement = statement.replaceAll("(?i)SELECT", "SELECT [cmis:objectId],");
+        statement = statement.replaceAll("(?i)SELECT", "SELECT [cmis:path],");
 
         Statement stmt;
         try {
@@ -301,8 +301,8 @@ public class Database {
                 stmt.executeUpdate(statement);
                 ResultSet rs = stmt.executeQuery(statement);
                 while ( rs.next() ) {
-                    String cmisObjectId = rs.getString("cmis:objectId");
-                    objects.add(cmisObjectId);
+                    String cmisPath = rs.getString("cmis:path");
+                    objects.add(cmisPath);
                 }
                 rs.close();
             } catch (SQLiteException e) {

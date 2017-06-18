@@ -168,7 +168,7 @@ public class FileBridgeRepository {
         // Check the "aip.json" file for AIP read permissions
         if (relativePath.toLowerCase().contains("aip.json")) {
             canReadAIP = FileBridgeUtils.canReadAIP(file.getPath());
-            System.out.println("AIP FOUND. Can read: " + canReadAIP);
+            //System.out.println("AIP FOUND. Can read: " + canReadAIP);
             // Load the AIP metadata files
             String aipId = relativePath.split("/")[0];
             if (canReadAIP && !aipMetadataMap.containsKey(aipId)) {
@@ -182,6 +182,7 @@ public class FileBridgeRepository {
             if ((pathLength >= 4) && canReadAIP &&
                     (relativePath.toLowerCase().contains("/representations/")) &&
                     (!relativePath.toLowerCase().contains("/metadata/"))) {
+                //System.out.println("FILE FOUND: " + file.getPath());
                 ObjectInfoImpl objectInfo = new ObjectInfoImpl();
                 compileProperties(null, file, null, objectInfo);
             }
@@ -191,7 +192,7 @@ public class FileBridgeRepository {
             if ((pathLength >= 5) && canReadAIP &&
                     (relativePath.toLowerCase().contains("/representations/")) &&
                     (!relativePath.toLowerCase().contains("/metadata/"))) {
-                System.out.println("FOLDER FOUND: " + file.getPath());
+                //System.out.println("FOLDER FOUND: " + file.getPath());
                 ObjectInfoImpl objectInfo = new ObjectInfoImpl();
                 compileProperties(null, file, null, objectInfo);
             }
@@ -584,9 +585,6 @@ public class FileBridgeRepository {
                             BigInteger skipCount, ObjectInfoHandler objectInfos) {
         boolean userReadOnly = checkUser(context, false);
 
-        // get the base folder
-        File folder = getFile(ROOT_ID);
-
         //get the parsed query object
         FileBridgeQuery fileBridgeQuery = new FileBridgeQuery(statement);
         if (fileBridgeQuery.getQueryType() == null) {
@@ -595,18 +593,15 @@ public class FileBridgeRepository {
             if (fileBridgeQuery.getFolderId().length() == 0) {
                 throw new CmisInvalidArgumentException("Invalid folder id.");
             }
-            folder = getFile(fileBridgeQuery.getFolderId());
+            File folder = getFile(fileBridgeQuery.getFolderId());
             if (!folder.isDirectory()) {
                 throw new CmisInvalidArgumentException("Not a folder!");
             }
         }
 
+        //get the objects type from the query: cmis:folder / cmis:document / cmis:rodaDocument
         TypeDefinition type = typeManager.getInternalTypeDefinition(fileBridgeQuery.getTypeId());
-        if (type == null) {
-            throw new CmisInvalidArgumentException("Unknown type.");
-        }
-
-        boolean queryFiles = (type.getBaseTypeId() == BaseTypeId.CMIS_DOCUMENT);
+        if (type == null) { throw new CmisInvalidArgumentException("Unknown type."); }
 
         // set defaults if values not set
         boolean iaa = FileBridgeUtils.getBooleanParameter(includeAllowableActions, false);
@@ -619,7 +614,7 @@ public class FileBridgeRepository {
         if (max < 0) { max = Integer.MAX_VALUE; }
 
         //Query the objects database for results
-        List<String> objectIds = this.database.query(statement);
+        List<String> objectPaths = this.database.query(statement);
 
         // prepare result
         ObjectListImpl result = new ObjectListImpl();
@@ -627,116 +622,27 @@ public class FileBridgeRepository {
         result.setHasMoreItems(false);
         int count = 0;
 
-        // iterate through children
-        for (File hit : folder.listFiles()) {
+        //create objects straight from the database results
+        for (String objectPath : objectPaths) {
+            count++;
+            if (skip > 0) { skip--; continue; }
+            if (result.getObjects().size() >= max) { result.setHasMoreItems(true); continue; }
 
-            // skip hidden files, for example '.DS_Store'
-            if (hit.isHidden()) { continue; }
+            File resultFile = new File(root.getPath() + objectPath);
 
-            //************************************************************************************
-            //BEGIN - AIP FILE BRIDGE
+            // build and add object
+            ObjectData object = compileObjectData(context, resultFile, null, iaa, false, userReadOnly, objectInfos, false);
 
-            String relativePath = hit.getPath().replace(root.getPath()+"/", "");
-            int pathLength = relativePath.split("/").length;
-
-            //**********************************************************
-            // WE ARE READING THE AIP INITIAL FOLDER
-            //**********************************************************
-            Boolean canReadAIP = false;
-
-            //**********************************************************
-            //we are in the AIPs "<guid>" root folder, iterate the direct children
-            for (File firstLevelChild : hit.listFiles()) {
-                // skip hidden files, for example '.DS_Store'
-                if (firstLevelChild.isHidden()) { continue; }
-
-                String firstLevelRelativePath = firstLevelChild.getPath().replace(root.getPath()+"/", "");
-                String[] firstLevelPathElements = firstLevelRelativePath.split("/");
-
-                //**********************************************************
-                // Check the "aip.json" file for AIP read permissions
-                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("aip.json"))) {
-                    canReadAIP = FileBridgeUtils.canReadAIP(firstLevelChild.getPath());
-                }
-
-                if ((firstLevelPathElements.length == 2) && (firstLevelPathElements[1].equals("representations")) && canReadAIP) {
-                    //**********************************************************
-                    //we are in the "representations" folder, iterate the direct children
-                    for (File secondLevelChild : firstLevelChild.listFiles()) {
-                        // skip hidden files, for example '.DS_Store'
-                        if (secondLevelChild.isHidden()) { continue; }
-
-                        //**********************************************************
-                        //we are in the "repX" folder, iterate the direct children
-                        for (File thirdLevelChild : secondLevelChild.listFiles()) {
-                            // skip hidden files, for example '.DS_Store'
-                            if (thirdLevelChild.isHidden()) { continue; }
-
-                            String thirdLevelRelativePath = thirdLevelChild.getPath().replace(root.getPath()+"/", "");
-                            String[] thirdLevelPathElements = thirdLevelRelativePath.split("/");
-
-                            if ((thirdLevelPathElements.length == 4) && (thirdLevelPathElements[3].equals("data"))) {
-                                //**********************************************************
-                                //we are in the "repX/data" folder, iterate the direct children
-                                //these are the files we are exposing through the CMIS server
-                                for (File fourthLevelChild : thirdLevelChild.listFiles()) {
-                                    // skip hidden files, for example '.DS_Store'
-                                    if (fourthLevelChild.isHidden()) { continue; }
-
-                                    // skip directory if documents are requested
-                                    if (fourthLevelChild.isDirectory() && queryFiles) { continue; }
-
-                                    // skip files if folders are requested
-                                    if (fourthLevelChild.isFile() && !queryFiles) { continue; }
-
-                                    count++;
-
-                                    if (skip > 0) { skip--; continue; }
-
-                                    if (result.getObjects().size() >= max) { result.setHasMoreItems(true); continue; }
-
-                                    // build and add child object
-                                    ObjectData object = compileObjectData(context, fourthLevelChild, null, iaa, false, userReadOnly, objectInfos);
-                                    boolean isMatch = false;
-
-                                    for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
-                                        for (String objectId : objectIds) {
-                                            if (prop.getId().equals("cmis:objectId") && !prop.getValues().isEmpty() && objectId.equals(prop.getValues().get(0))) {
-                                                isMatch = true;
-                                            }
-                                        }
-                                    }
-
-                                    if (isMatch) {
-                                        // set query names
-                                        for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
-                                            //all fields selected - try to extract as many properties / fields as possible from the current object type
-                                            if (type.getPropertyDefinitions().get(prop.getId()) != null) {
-                                                ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
-                                            }
-                                        }
-                                        result.getObjects().add(object);
-                                    }
-                                }
-                                //END "repX/data" folder
-                                //**********************************************************
-                            }
-                        }
-                        //END "rep1, rep2" folder
-                        //**********************************************************
-                    }
-                    //END "representations" folder
-                    //**********************************************************
+            // set query names
+            for (PropertyData<?> prop : object.getProperties().getPropertyList()) {
+                //try to extract as many properties / fields as possible from the current object type
+                //if a property is not present (the object type might not have it) do not include it
+                if (type.getPropertyDefinitions().get(prop.getId()) != null) {
+                    ((MutablePropertyData<?>) prop).setQueryName(type.getPropertyDefinitions().get(prop.getId()).getQueryName());
                 }
             }
-            //END AIP root folder
-            //**********************************************************
-
-            //END - AIP FILE BRIDGE
-            //************************************************************************************
-
+            result.getObjects().add(object);
         }
-
         result.setNumItems(BigInteger.valueOf(count));
 
         return result;
@@ -745,10 +651,57 @@ public class FileBridgeRepository {
     // --- helpers ---
 
     /**
-     * Gathers all base properties of a file or folder.
+     * [Function Signature #1] Compiles an object type object from a file or folder.
+     */
+    private ObjectData compileObjectData(CallContext context, File file,
+                                         Set<String> filter, boolean includeAllowableActions,
+                                         boolean includeAcl, boolean userReadOnly,
+                                         ObjectInfoHandler objectInfos) {
+        return this.compileObjectData(context, file, filter, includeAllowableActions, includeAcl, userReadOnly, objectInfos, true);
+    }
+
+    /**
+     * [Function Signature #2] Compiles an object type object from a file or folder.
+     */
+    private ObjectData compileObjectData(CallContext context, File file,
+                                         Set<String> filter, boolean includeAllowableActions,
+                                         boolean includeAcl, boolean userReadOnly,
+                                         ObjectInfoHandler objectInfos, Boolean updateProperties) {
+        ObjectDataImpl result = new ObjectDataImpl();
+        ObjectInfoImpl objectInfo = new ObjectInfoImpl();
+
+        result.setProperties(compileProperties(context, file, filter, objectInfo, updateProperties));
+
+        if (includeAllowableActions) {
+            result.setAllowableActions(compileAllowableActions(file, userReadOnly));
+        }
+
+        if (includeAcl) {
+            result.setAcl(compileAcl(file));
+            result.setIsExactAcl(true);
+        }
+
+        if (context.isObjectInfoRequired()) {
+            objectInfo.setObject(result);
+            objectInfos.addObjectInfo(objectInfo);
+        }
+
+        return result;
+    }
+
+    /**
+     * [Function Signature #1] Gathers all base properties of a file or folder.
      */
     private Properties compileProperties(CallContext context, File file, Set<String> orgfilter,
                                          ObjectInfoImpl objectInfo) {
+        return this.compileProperties(context, file, orgfilter, objectInfo, true);
+    }
+
+    /**
+     * [Function Signature #2] Gathers all base properties of a file or folder.
+     */
+    private Properties compileProperties(CallContext context, File file, Set<String> orgfilter,
+                                         ObjectInfoImpl objectInfo, Boolean updateProperties) {
         if (file == null) {
             throw new IllegalArgumentException("File must not be null!");
         }
@@ -814,77 +767,77 @@ public class FileBridgeRepository {
             String id = fileToId(file);
             addPropertyId(result, typeId, filter, PropertyIds.OBJECT_ID, id);
             objectInfo.setId(id);
-            if (!id.equals(ROOT_ID)) { database.createObject(typeId, id); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.createObject(typeId, id); }
 
             // name
             String name = file.getName();
             addPropertyString(result, typeId, filter, PropertyIds.NAME, name);
             objectInfo.setName(name);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.NAME, name); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.NAME, name); }
 
             // created and modified by
             addPropertyString(result, typeId, filter, PropertyIds.CREATED_BY, USER_UNKNOWN);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.CREATED_BY, USER_UNKNOWN); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.CREATED_BY, USER_UNKNOWN); }
             addPropertyString(result, typeId, filter, PropertyIds.LAST_MODIFIED_BY, USER_UNKNOWN);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.LAST_MODIFIED_BY, USER_UNKNOWN); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.LAST_MODIFIED_BY, USER_UNKNOWN); }
             objectInfo.setCreatedBy(USER_UNKNOWN);
 
             // creation and modification date
             GregorianCalendar lastModified = FileBridgeUtils.millisToCalendar(file.lastModified());
             addPropertyDateTime(result, typeId, filter, PropertyIds.CREATION_DATE, lastModified);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.CREATION_DATE, sdf.format(lastModified.getTime())); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.CREATION_DATE, sdf.format(lastModified.getTime())); }
             addPropertyDateTime(result, typeId, filter, PropertyIds.LAST_MODIFICATION_DATE, lastModified);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.LAST_MODIFICATION_DATE, sdf.format(lastModified.getTime())); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.LAST_MODIFICATION_DATE, sdf.format(lastModified.getTime())); }
             objectInfo.setCreationDate(lastModified);
             objectInfo.setLastModificationDate(lastModified);
 
             // change token - always null
             addPropertyString(result, typeId, filter, PropertyIds.CHANGE_TOKEN, null);
-            if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.CHANGE_TOKEN, null); }
+            if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.CHANGE_TOKEN, null); }
 
             // CMIS 1.1 properties
             if (context != null && context.getCmisVersion() != CmisVersion.CMIS_1_0) {
                 addPropertyString(result, typeId, filter, PropertyIds.DESCRIPTION, null);
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.DESCRIPTION, null); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.DESCRIPTION, null); }
                 addPropertyIdList(result, typeId, filter, PropertyIds.SECONDARY_OBJECT_TYPE_IDS, null);
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.SECONDARY_OBJECT_TYPE_IDS, null); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.SECONDARY_OBJECT_TYPE_IDS, null); }
             }
 
             // directory or file
             if (file.isDirectory()) {
                 // base type and type name
                 addPropertyId(result, typeId, filter, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_FOLDER.value());
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_FOLDER.value()); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_FOLDER.value()); }
                 addPropertyId(result, typeId, filter, PropertyIds.OBJECT_TYPE_ID, BaseTypeId.CMIS_FOLDER.value());
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.OBJECT_TYPE_ID, BaseTypeId.CMIS_FOLDER.value()); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.OBJECT_TYPE_ID, BaseTypeId.CMIS_FOLDER.value()); }
                 String path = getRepositoryPath(file);
                 addPropertyString(result, typeId, filter, PropertyIds.PATH, path);
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.PATH, path); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.PATH, path); }
 
                 // folder properties
                 if (!root.equals(file)) {
                     addPropertyId(result, typeId, filter, PropertyIds.PARENT_ID,
                             (root.equals(file.getParentFile()) ? ROOT_ID : fileToId(file.getParentFile())));
                     objectInfo.setHasParent(true);
-                    if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.PARENT_ID,
+                    if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.PARENT_ID,
                             (root.equals(file.getParentFile()) ? ROOT_ID : fileToId(file.getParentFile()))); }
                 } else {
                     addPropertyId(result, typeId, filter, PropertyIds.PARENT_ID, null);
                     objectInfo.setHasParent(false);
-                    if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.PARENT_ID, null); }
+                    if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.PARENT_ID, null); }
                 }
 
                 addPropertyIdList(result, typeId, filter, PropertyIds.ALLOWED_CHILD_OBJECT_TYPE_IDS, null);
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.ALLOWED_CHILD_OBJECT_TYPE_IDS, null); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.ALLOWED_CHILD_OBJECT_TYPE_IDS, null); }
             } else {
                 // base type and type name
                 addPropertyId(result, typeId, filter, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_DOCUMENT.value());
-                database.updateField(typeId, id, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_DOCUMENT.value());
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.BASE_TYPE_ID, BaseTypeId.CMIS_DOCUMENT.value()); }
                 addPropertyId(result, typeId, filter, PropertyIds.OBJECT_TYPE_ID, FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value());
                 //BaseTypeId.CMIS_DOCUMENT.value());
-                database.updateField(typeId, id, PropertyIds.OBJECT_TYPE_ID, FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value());
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.OBJECT_TYPE_ID, FileBridgeCmisTypeId.CMIS_RODA_DOCUMENT.value()); }
                 String path = getRepositoryPath(file);
-                if (!id.equals(ROOT_ID)) { database.updateField(typeId, id, PropertyIds.PATH, path); }
+                if (!id.equals(ROOT_ID) && updateProperties) { database.updateField(typeId, id, PropertyIds.PATH, path); }
 
                 // load file's metadata from the AIP
                 String aipMetadataId = null;
@@ -898,310 +851,310 @@ public class FileBridgeRepository {
                     // load EAD metadata into RODA Document properties
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(),
                             aipMetadata.getEad2002Metadata().getUnitId());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(),
-                            aipMetadata.getEad2002Metadata().getUnitId());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_ID.value(),
+                            aipMetadata.getEad2002Metadata().getUnitId()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(),
                             aipMetadata.getEad2002Metadata().getUnitTitle());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(),
-                            aipMetadata.getEad2002Metadata().getUnitTitle());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value(),
+                            aipMetadata.getEad2002Metadata().getUnitTitle()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value(),
                             aipMetadata.getEad2002Metadata().getCountryCode());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value(),
-                            aipMetadata.getEad2002Metadata().getCountryCode());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value(),
+                            aipMetadata.getEad2002Metadata().getCountryCode()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value(),
                             aipMetadata.getEad2002Metadata().getRepositoryCode());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value(),
-                            aipMetadata.getEad2002Metadata().getRepositoryCode());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value(),
+                            aipMetadata.getEad2002Metadata().getRepositoryCode()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value(),
                             aipMetadata.getEad2002Metadata().getUnitDate());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value(),
-                            aipMetadata.getEad2002Metadata().getUnitDate());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDate()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value(),
                             aipMetadata.getEad2002Metadata().getUnitDateLabel());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value(),
-                            aipMetadata.getEad2002Metadata().getUnitDateLabel());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDateLabel()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value(),
                             aipMetadata.getEad2002Metadata().getUnitDateNormal());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value(),
-                            aipMetadata.getEad2002Metadata().getUnitDateNormal());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value(),
+                            aipMetadata.getEad2002Metadata().getUnitDateNormal()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value(),
                             aipMetadata.getEad2002Metadata().getPhysicalDescription());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value(),
-                            aipMetadata.getEad2002Metadata().getPhysicalDescription());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescription()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value(),
                             aipMetadata.getEad2002Metadata().getPhysicalDescriptionExtent());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value(),
-                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionExtent());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionExtent()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value(),
                             aipMetadata.getEad2002Metadata().getPhysicalDescriptionDimensions());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value(),
-                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionDimensions());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionDimensions()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value(),
                             aipMetadata.getEad2002Metadata().getPhysicalDescriptionAppearance());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value(),
-                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionAppearance());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalDescriptionAppearance()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value(),
                             aipMetadata.getEad2002Metadata().getRepositoryName());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value(),
-                            aipMetadata.getEad2002Metadata().getRepositoryName());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value(),
+                            aipMetadata.getEad2002Metadata().getRepositoryName()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value(),
                             aipMetadata.getEad2002Metadata().getLangMaterial());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value(),
-                            aipMetadata.getEad2002Metadata().getLangMaterial());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value(),
+                            aipMetadata.getEad2002Metadata().getLangMaterial()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value(),
                             aipMetadata.getEad2002Metadata().getLangMaterialLanguage());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value(),
-                            aipMetadata.getEad2002Metadata().getLangMaterialLanguage());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value(),
+                            aipMetadata.getEad2002Metadata().getLangMaterialLanguage()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value(),
                             aipMetadata.getEad2002Metadata().getNoteSourcesDescription());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value(),
-                            aipMetadata.getEad2002Metadata().getNoteSourcesDescription());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getNoteSourcesDescription()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value(),
                             aipMetadata.getEad2002Metadata().getNoteGeneralNote());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value(),
-                            aipMetadata.getEad2002Metadata().getNoteGeneralNote());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value(),
+                            aipMetadata.getEad2002Metadata().getNoteGeneralNote()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION.value(),
                             aipMetadata.getEad2002Metadata().getOrigination());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION.value(),
-                            aipMetadata.getEad2002Metadata().getOrigination());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION.value(),
+                            aipMetadata.getEad2002Metadata().getOrigination()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value(),
                             aipMetadata.getEad2002Metadata().getOriginationCreator());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value(),
-                            aipMetadata.getEad2002Metadata().getOriginationCreator());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginationCreator()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value(),
                             aipMetadata.getEad2002Metadata().getOriginationProducer());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value(),
-                            aipMetadata.getEad2002Metadata().getOriginationProducer());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginationProducer()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value(),
                             aipMetadata.getEad2002Metadata().getArchiveDescription());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value(),
-                            aipMetadata.getEad2002Metadata().getArchiveDescription());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getArchiveDescription()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value(),
                             aipMetadata.getEad2002Metadata().getMaterialSpecification());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value(),
-                            aipMetadata.getEad2002Metadata().getMaterialSpecification());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value(),
+                            aipMetadata.getEad2002Metadata().getMaterialSpecification()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value(),
                             aipMetadata.getEad2002Metadata().getOddLevelOfDetail());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value(),
-                            aipMetadata.getEad2002Metadata().getOddLevelOfDetail());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value(),
+                            aipMetadata.getEad2002Metadata().getOddLevelOfDetail()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value(),
                             aipMetadata.getEad2002Metadata().getOddStatusDescription());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value(),
-                            aipMetadata.getEad2002Metadata().getOddStatusDescription());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value(),
+                            aipMetadata.getEad2002Metadata().getOddStatusDescription()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value(),
                             aipMetadata.getEad2002Metadata().getScopeContent());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value(),
-                            aipMetadata.getEad2002Metadata().getScopeContent());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value(),
+                            aipMetadata.getEad2002Metadata().getScopeContent()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value(),
                             aipMetadata.getEad2002Metadata().getArrangement());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value(),
-                            aipMetadata.getEad2002Metadata().getArrangement());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value(),
+                            aipMetadata.getEad2002Metadata().getArrangement()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_APPRAISAL.value(),
                             aipMetadata.getEad2002Metadata().getAppraisal());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_APPRAISAL.value(),
-                            aipMetadata.getEad2002Metadata().getAppraisal());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_APPRAISAL.value(),
+                            aipMetadata.getEad2002Metadata().getAppraisal()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value(),
                             aipMetadata.getEad2002Metadata().getAcquisitionInfo());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value(),
-                            aipMetadata.getEad2002Metadata().getAcquisitionInfo());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value(),
+                            aipMetadata.getEad2002Metadata().getAcquisitionInfo()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCRUALS.value(),
                             aipMetadata.getEad2002Metadata().getAccruals());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACCRUALS.value(),
-                            aipMetadata.getEad2002Metadata().getAccruals());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACCRUALS.value(),
+                            aipMetadata.getEad2002Metadata().getAccruals()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value(),
                             aipMetadata.getEad2002Metadata().getCustodialHistory());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value(),
-                            aipMetadata.getEad2002Metadata().getCustodialHistory());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value(),
+                            aipMetadata.getEad2002Metadata().getCustodialHistory()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
                             aipMetadata.getEad2002Metadata().getProcessInfoDate());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
-                            aipMetadata.getEad2002Metadata().getProcessInfoDate());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
+                            aipMetadata.getEad2002Metadata().getProcessInfoDate()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
                             aipMetadata.getEad2002Metadata().getProcessInfoArchivistNotes());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
-                            aipMetadata.getEad2002Metadata().getProcessInfoArchivistNotes());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
+                            aipMetadata.getEad2002Metadata().getProcessInfoArchivistNotes()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value(),
                             aipMetadata.getEad2002Metadata().getOriginalsLocation());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value(),
-                            aipMetadata.getEad2002Metadata().getOriginalsLocation());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value(),
+                            aipMetadata.getEad2002Metadata().getOriginalsLocation()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value(),
                             aipMetadata.getEad2002Metadata().getAlternativeFormAvailable());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value(),
-                            aipMetadata.getEad2002Metadata().getAlternativeFormAvailable());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value(),
+                            aipMetadata.getEad2002Metadata().getAlternativeFormAvailable()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value(),
                             aipMetadata.getEad2002Metadata().getRelatedMaterial());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value(),
-                            aipMetadata.getEad2002Metadata().getRelatedMaterial());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value(),
+                            aipMetadata.getEad2002Metadata().getRelatedMaterial()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value(),
                             aipMetadata.getEad2002Metadata().getAccessRestrictions());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value(),
-                            aipMetadata.getEad2002Metadata().getAccessRestrictions());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value(),
+                            aipMetadata.getEad2002Metadata().getAccessRestrictions()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value(),
                             aipMetadata.getEad2002Metadata().getUseRestrictions());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value(),
-                            aipMetadata.getEad2002Metadata().getUseRestrictions());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value(),
+                            aipMetadata.getEad2002Metadata().getUseRestrictions()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value(),
                             aipMetadata.getEad2002Metadata().getOtherFindAid());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value(),
-                            aipMetadata.getEad2002Metadata().getOtherFindAid());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value(),
+                            aipMetadata.getEad2002Metadata().getOtherFindAid()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value(),
                             aipMetadata.getEad2002Metadata().getPhysicalTech());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value(),
-                            aipMetadata.getEad2002Metadata().getPhysicalTech());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value(),
+                            aipMetadata.getEad2002Metadata().getPhysicalTech()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value(),
                             aipMetadata.getEad2002Metadata().getBibliography());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value(),
-                            aipMetadata.getEad2002Metadata().getBibliography());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value(),
+                            aipMetadata.getEad2002Metadata().getBibliography()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value(),
                             aipMetadata.getEad2002Metadata().getPreferCite());
-                    database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value(),
-                            aipMetadata.getEad2002Metadata().getPreferCite());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value(),
+                            aipMetadata.getEad2002Metadata().getPreferCite()); }
 
                     // load Dublin Core metadata into RODA Document properties
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getTitle());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getTitle());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getTitle()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value(),
                             aipMetadata.getDublinCore20021212Metadata().getIdentifier());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getIdentifier());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getIdentifier()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value(),
                             aipMetadata.getDublinCore20021212Metadata().getCreator());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getCreator());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getCreator()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getInitialDate());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getInitialDate());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getInitialDate()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getFinalDate());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getFinalDate());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getFinalDate()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
                             aipMetadata.getDublinCore20021212Metadata().getDescription());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getDescription());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getDescription()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value(),
                             aipMetadata.getDublinCore20021212Metadata().getPublisher());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getPublisher());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getPublisher()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value(),
                             aipMetadata.getDublinCore20021212Metadata().getContributor());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getContributor());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getContributor()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value(),
                             aipMetadata.getDublinCore20021212Metadata().getRights());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getRights());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getRights()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getLanguage());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getLanguage());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getLanguage()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getCoverage());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getCoverage());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getCoverage()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value(),
                             aipMetadata.getDublinCore20021212Metadata().getFormat());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getFormat());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getFormat()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value(),
                             aipMetadata.getDublinCore20021212Metadata().getRelation());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getRelation());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getRelation()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value(),
                             aipMetadata.getDublinCore20021212Metadata().getSubject());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getSubject());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getSubject()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getType());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getType());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getType()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getSource());
-                    database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getSource());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value(),
+                            aipMetadata.getDublinCore20021212Metadata().getSource()); }
 
                     // load Key-Value metadata into RODA Document properties
                     addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value(),
                             aipMetadata.getKeyValueMetadata().getId());
-                    database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value(),
-                            aipMetadata.getKeyValueMetadata().getId());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value(),
+                            aipMetadata.getKeyValueMetadata().getId()); }
                     addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value(),
                             aipMetadata.getKeyValueMetadata().getTitle());
-                    database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value(),
-                            aipMetadata.getKeyValueMetadata().getTitle());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value(),
+                            aipMetadata.getKeyValueMetadata().getTitle()); }
                     addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value(),
                             aipMetadata.getKeyValueMetadata().getProducer());
-                    database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value(),
-                            aipMetadata.getKeyValueMetadata().getProducer());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value(),
+                            aipMetadata.getKeyValueMetadata().getProducer()); }
                     addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
                             aipMetadata.getKeyValueMetadata().getDate());
-                    database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
-                            aipMetadata.getKeyValueMetadata().getDate());
+                    if (updateProperties) { database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
+                            aipMetadata.getKeyValueMetadata().getDate()); }
                 }
 
                 // file properties
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_IMMUTABLE, false);
-                database.updateField(typeId, id, PropertyIds.IS_IMMUTABLE, "false");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_IMMUTABLE, "false"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_LATEST_VERSION, true);
-                database.updateField(typeId, id, PropertyIds.IS_LATEST_VERSION, "true");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_VERSION, "true"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_MAJOR_VERSION, true);
-                database.updateField(typeId, id, PropertyIds.IS_MAJOR_VERSION, "true");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_MAJOR_VERSION, "true"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_LATEST_MAJOR_VERSION, true);
-                database.updateField(typeId, id, PropertyIds.IS_LATEST_MAJOR_VERSION, "true");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_MAJOR_VERSION, "true"); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.VERSION_LABEL, file.getName());
-                database.updateField(typeId, id, PropertyIds.VERSION_LABEL, file.getName());
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_LABEL, file.getName()); }
 
                 addPropertyId(result, typeId, filter, PropertyIds.VERSION_SERIES_ID, fileToId(file));
-                database.updateField(typeId, id, PropertyIds.VERSION_SERIES_ID, fileToId(file));
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_SERIES_ID, fileToId(file)); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, false);
-                database.updateField(typeId, id, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, "false");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, "false"); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.VERSION_SERIES_CHECKED_OUT_BY, null);
-                database.updateField(typeId, id, PropertyIds.VERSION_SERIES_CHECKED_OUT_BY, null);
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_SERIES_CHECKED_OUT_BY, null); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.VERSION_SERIES_CHECKED_OUT_ID, null);
-                database.updateField(typeId, id, PropertyIds.VERSION_SERIES_CHECKED_OUT_ID, null);
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_SERIES_CHECKED_OUT_ID, null); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.CHECKIN_COMMENT, "");
-                database.updateField(typeId, id, PropertyIds.CHECKIN_COMMENT, "");
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.CHECKIN_COMMENT, ""); }
 
                 if (context != null && context.getCmisVersion() != CmisVersion.CMIS_1_0) {
                     addPropertyBoolean(result, typeId, filter, PropertyIds.IS_PRIVATE_WORKING_COPY, false);
-                    database.updateField(typeId, id, PropertyIds.IS_PRIVATE_WORKING_COPY, "false");
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_PRIVATE_WORKING_COPY, "false"); }
                 }
 
                 if (file.length() == 0) {
                     addPropertyBigInteger(result, typeId, filter, PropertyIds.CONTENT_STREAM_LENGTH, null);
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_LENGTH, null);
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_LENGTH, null); }
                     addPropertyString(result, typeId, filter, PropertyIds.CONTENT_STREAM_MIME_TYPE, null);
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_MIME_TYPE, null);
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_MIME_TYPE, null); }
                     addPropertyString(result, typeId, filter, PropertyIds.CONTENT_STREAM_FILE_NAME, null);
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_FILE_NAME, null);
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_FILE_NAME, null); }
                     objectInfo.setHasContent(false);
                     objectInfo.setContentType(null);
                     objectInfo.setFileName(null);
                 } else {
                     addPropertyInteger(result, typeId, filter, PropertyIds.CONTENT_STREAM_LENGTH, file.length());
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_LENGTH, String.valueOf(file.length()));
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_LENGTH, String.valueOf(file.length())); }
                     addPropertyString(result, typeId, filter, PropertyIds.CONTENT_STREAM_MIME_TYPE, MimeTypes.getMIMEType(file));
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_MIME_TYPE, MimeTypes.getMIMEType(file));
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_MIME_TYPE, MimeTypes.getMIMEType(file)); }
                     addPropertyString(result, typeId, filter, PropertyIds.CONTENT_STREAM_FILE_NAME, file.getName());
-                    database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_FILE_NAME, file.getName());
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_FILE_NAME, file.getName()); }
                     objectInfo.setHasContent(true);
                     objectInfo.setContentType(MimeTypes.getMIMEType(file));
                     objectInfo.setFileName(file.getName());
                 }
 
                 addPropertyId(result, typeId, filter, PropertyIds.CONTENT_STREAM_ID, null);
-                database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_ID, null);
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.CONTENT_STREAM_ID, null); }
             }
 
             return result;
@@ -2185,35 +2138,6 @@ public class FileBridgeRepository {
     }
 
     // --- helpers ---
-
-    /**
-     * Compiles an object type object from a file or folder.
-     */
-    private ObjectData compileObjectData(CallContext context, File file,
-                                         Set<String> filter, boolean includeAllowableActions,
-                                         boolean includeAcl, boolean userReadOnly,
-                                         ObjectInfoHandler objectInfos) {
-        ObjectDataImpl result = new ObjectDataImpl();
-        ObjectInfoImpl objectInfo = new ObjectInfoImpl();
-
-        result.setProperties(compileProperties(context, file, filter, objectInfo));
-
-        if (includeAllowableActions) {
-            result.setAllowableActions(compileAllowableActions(file, userReadOnly));
-        }
-
-        if (includeAcl) {
-            result.setAcl(compileAcl(file));
-            result.setIsExactAcl(true);
-        }
-
-        if (context.isObjectInfoRequired()) {
-            objectInfo.setObject(result);
-            objectInfos.addObjectInfo(objectInfo);
-        }
-
-        return result;
-    }
 
     /**
      * Checks a property set for a new object.
