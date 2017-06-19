@@ -88,12 +88,12 @@ public class Database {
 
             //Create the "cmis:folder" table
             sql = "CREATE TABLE [cmis:folder] (" +
-                " [cmis:objectId] VARCHAR(500) PRIMARY KEY NOT NULL UNIQUE," +
+                " [cmis:objectId] VARCHAR(500) PRIMARY KEY NOT NULL," +
                 " [cmis:name] VARCHAR(500), " +
                 " [cmis:createdBy] VARCHAR(500), " +
                 " [cmis:lastModifiedBy] VARCHAR(500), " +
-                " [cmis:creationDate] VARCHAR(500), " +
-                " [cmis:lastModificationDate] VARCHAR(500), " +
+                " [cmis:creationDate] DATETIME, " +
+                " [cmis:lastModificationDate] DATETIME, " +
                 " [cmis:changeToken] VARCHAR(500), " +
                 " [cmis:description] VARCHAR(500), " +
                 " [cmis:secondaryObjectTypeIds] VARCHAR(500), " +
@@ -115,29 +115,29 @@ public class Database {
 
             //Create the "cmis:rodaDocument" table
             sql = "CREATE TABLE [cmis:rodaDocument] (" +
-                " [cmis:objectId] VARCHAR(500) PRIMARY KEY NOT NULL UNIQUE," +
+                " [cmis:objectId] VARCHAR(500) PRIMARY KEY NOT NULL," +
                 " [cmis:name] VARCHAR(500), " +
                 " [cmis:createdBy] VARCHAR(500), " +
                 " [cmis:lastModifiedBy] VARCHAR(500), " +
-                " [cmis:creationDate] VARCHAR(500), " +
-                " [cmis:lastModificationDate] VARCHAR(500), " +
+                " [cmis:creationDate] DATETIME, " +
+                " [cmis:lastModificationDate] DATETIME, " +
                 " [cmis:changeToken] VARCHAR(500), " +
                 " [cmis:description] VARCHAR(500), " +
                 " [cmis:secondaryObjectTypeIds] VARCHAR(500), " +
                 " [cmis:baseTypeId] VARCHAR(500), " +
                 " [cmis:objectTypeId] VARCHAR(500), " +
                 " [cmis:path] VARCHAR(5000), " +
-                " [cmis:isImmutable] VARCHAR(500), " +
-                " [cmis:isLatestVersion] VARCHAR(500), " +
-                " [cmis:isMajorVersion] VARCHAR(500), " +
-                " [cmis:isLatestMajorVersion] VARCHAR(500), " +
+                " [cmis:isImmutable] BOOLEAN, " +
+                " [cmis:isLatestVersion] BOOLEAN, " +
+                " [cmis:isMajorVersion] BOOLEAN, " +
+                " [cmis:isLatestMajorVersion] BOOLEAN, " +
                 " [cmis:versionLabel] VARCHAR(500), " +
                 " [cmis:versionSeriesId] VARCHAR(500), " +
-                " [cmis:isVersionSeriesCheckedOut] VARCHAR(500), " +
+                " [cmis:isVersionSeriesCheckedOut] BOOLEAN, " +
                 " [cmis:versionSeriesCheckedOutBy] VARCHAR(500), " +
                 " [cmis:versionSeriesCheckedOutId] VARCHAR(500), " +
                 " [cmis:checkinComment] VARCHAR(500), " +
-                " [cmis:isPrivateWorkingCopy] VARCHAR(500), " +
+                " [cmis:isPrivateWorkingCopy] BOOLEAN, " +
                 " [cmis:contentStreamLength] VARCHAR(500), " +
                 " [cmis:contentStreamMimeType] VARCHAR(500), " +
                 " [cmis:contentStreamFileName] VARCHAR(500), " +
@@ -171,7 +171,7 @@ public class Database {
                 " [metadata:ead:acquisitionInfo] VARCHAR(500), " +
                 " [metadata:ead:accruals] VARCHAR(500), " +
                 " [metadata:ead:custodialHistory] VARCHAR(500), " +
-                " [metadata:ead:processInfoDate] VARCHAR(500), " +
+                " [metadata:ead:processInfoDate] DATETIME, " +
                 " [metadata:ead:processInfoArchivistNotes] VARCHAR(500), " +
                 " [metadata:ead:originalsLocation] VARCHAR(500), " +
                 " [metadata:ead:alternativeFormAvailable] VARCHAR(500), " +
@@ -185,8 +185,8 @@ public class Database {
                 " [metadata:dublinCore:title] VARCHAR(500), " +
                 " [metadata:dublinCore:identifier] VARCHAR(500), " +
                 " [metadata:dublinCore:creator] VARCHAR(500), " +
-                " [metadata:dublinCore:initialDate] VARCHAR(500), " +
-                " [metadata:dublinCore:finalDate] VARCHAR(500), " +
+                " [metadata:dublinCore:initialDate] DATETIME, " +
+                " [metadata:dublinCore:finalDate] DATETIME, " +
                 " [metadata:dublinCore:description] VARCHAR(500), " +
                 " [metadata:dublinCore:publisher] VARCHAR(500), " +
                 " [metadata:dublinCore:contributor] VARCHAR(500), " +
@@ -201,7 +201,7 @@ public class Database {
                 " [metadata:keyValue:id] VARCHAR(500), " +
                 " [metadata:keyValue:title] VARCHAR(500), " +
                 " [metadata:keyValue:producer] VARCHAR(500), " +
-                " [metadata:keyValue:date] VARCHAR(500)" +
+                " [metadata:keyValue:date] DATETIME" +
                 ")";
             try {
                 stmt.executeUpdate(sql);
@@ -320,7 +320,9 @@ public class Database {
                     resultWhereClause += token + " ";
                 }
             }
-            statement = statement.replace(whereClause, resultWhereClause);
+            statement = statement.replaceAll("(?i)WHERE " + whereClause, "WHERE " + resultWhereClause);
+            statement = statement.replaceAll("(?i)\\[NOT\\(", "NOT([");
+            statement = statement.replaceAll("(?i)\\)]", "])");
         }
 
         // IN_FOLDER

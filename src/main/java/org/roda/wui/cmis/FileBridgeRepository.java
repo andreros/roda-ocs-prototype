@@ -24,6 +24,7 @@ import org.roda.wui.cmis.database.Query;
 
 import java.io.*;
 import java.math.BigInteger;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -770,7 +771,7 @@ public class FileBridgeRepository {
         // let's do it
         try {
             PropertiesImpl result = new PropertiesImpl();
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy MMM dd HH:mm:ss");
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
             // id
             String id = fileToId(file);
@@ -976,8 +977,14 @@ public class FileBridgeRepository {
                             aipMetadata.getEad2002Metadata().getCustodialHistory()); }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
                             aipMetadata.getEad2002Metadata().getProcessInfoDate());
-                    if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
-                            aipMetadata.getEad2002Metadata().getProcessInfoDate()); }
+                    if (updateProperties) {
+                        try {
+                            SimpleDateFormat sdfProcessInfoDate = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parseProcessInfoDate = sdfProcessInfoDate.parse(aipMetadata.getEad2002Metadata().getProcessInfoDate());
+                            database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value(),
+                                    sdf.format(parseProcessInfoDate));
+                        } catch (ParseException ignored ) { /* fail silently */ }
+                    }
                     addPropertyString(result, typeId, filter, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
                             aipMetadata.getEad2002Metadata().getProcessInfoArchivistNotes());
                     if (updateProperties) { database.updateField(typeId, id, MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value(),
@@ -1034,12 +1041,24 @@ public class FileBridgeRepository {
                             aipMetadata.getDublinCore20021212Metadata().getCreator()); }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getInitialDate());
-                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getInitialDate()); }
+                    if (updateProperties) {
+                        try {
+                            SimpleDateFormat sdfInitialDate = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parseInitialDate = sdfInitialDate.parse(aipMetadata.getDublinCore20021212Metadata().getInitialDate());
+                            database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value(),
+                                    sdf.format(parseInitialDate));
+                        } catch (ParseException ignored ) { /* fail silently */ }
+                    }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
                             aipMetadata.getDublinCore20021212Metadata().getFinalDate());
-                    if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
-                            aipMetadata.getDublinCore20021212Metadata().getFinalDate()); }
+                    if (updateProperties) {
+                        try {
+                            SimpleDateFormat sdfFinalDate = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parseFinalDate = sdfFinalDate.parse(aipMetadata.getDublinCore20021212Metadata().getFinalDate());
+                            database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value(),
+                                    sdf.format(parseFinalDate));
+                        } catch (ParseException ignored ) { /* fail silently */ }
+                    }
                     addPropertyString(result, typeId, filter, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
                             aipMetadata.getDublinCore20021212Metadata().getDescription());
                     if (updateProperties) { database.updateField(typeId, id, MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value(),
@@ -1100,22 +1119,28 @@ public class FileBridgeRepository {
                             aipMetadata.getKeyValueMetadata().getProducer()); }
                     addPropertyString(result, typeId, filter, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
                             aipMetadata.getKeyValueMetadata().getDate());
-                    if (updateProperties) { database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
-                            aipMetadata.getKeyValueMetadata().getDate()); }
+                    if (updateProperties) {
+                        try {
+                            SimpleDateFormat sdfKeyValueDate = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parseKeyValueDate = sdfKeyValueDate.parse(aipMetadata.getKeyValueMetadata().getDate());
+                            database.updateField(typeId, id, MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value(),
+                                    sdf.format(parseKeyValueDate));
+                        } catch (ParseException ignored ) { /* fail silently */ }
+                    }
                 }
 
                 // file properties
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_IMMUTABLE, false);
-                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_IMMUTABLE, "false"); }
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_IMMUTABLE, "0"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_LATEST_VERSION, true);
-                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_VERSION, "true"); }
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_VERSION, "1"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_MAJOR_VERSION, true);
-                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_MAJOR_VERSION, "true"); }
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_MAJOR_VERSION, "1"); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_LATEST_MAJOR_VERSION, true);
-                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_MAJOR_VERSION, "true"); }
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_LATEST_MAJOR_VERSION, "1"); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.VERSION_LABEL, file.getName());
                 if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_LABEL, file.getName()); }
@@ -1124,7 +1149,7 @@ public class FileBridgeRepository {
                 if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_SERIES_ID, fileToId(file)); }
 
                 addPropertyBoolean(result, typeId, filter, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, false);
-                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, "false"); }
+                if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_VERSION_SERIES_CHECKED_OUT, "0"); }
 
                 addPropertyString(result, typeId, filter, PropertyIds.VERSION_SERIES_CHECKED_OUT_BY, null);
                 if (updateProperties) { database.updateField(typeId, id, PropertyIds.VERSION_SERIES_CHECKED_OUT_BY, null); }
@@ -1137,7 +1162,7 @@ public class FileBridgeRepository {
 
                 if (context != null && context.getCmisVersion() != CmisVersion.CMIS_1_0) {
                     addPropertyBoolean(result, typeId, filter, PropertyIds.IS_PRIVATE_WORKING_COPY, false);
-                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_PRIVATE_WORKING_COPY, "false"); }
+                    if (updateProperties) { database.updateField(typeId, id, PropertyIds.IS_PRIVATE_WORKING_COPY, "0"); }
                 }
 
                 if (file.length() == 0) {
