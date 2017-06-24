@@ -1,6 +1,7 @@
 package org.roda.wui.cmis.database;
 
 import org.apache.chemistry.opencmis.commons.PropertyIds;
+import org.apache.chemistry.opencmis.commons.exceptions.CmisInvalidArgumentException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,16 +13,30 @@ import java.util.regex.Pattern;
  */
 public class Query {
 
-    //Query statement
+    /**
+     * Query statement.
+     */
     private String statement = "";
-    //Query type
+    /**
+     * Query type. Possible types: SIMPLE, WHERE, IN_FOLDER, IN_TREE
+     */
     private String queryType = null;
-    //Simple query pattern
+    /**
+     * Simple query pattern / regular expression.
+     */
     private Pattern SIMPLE_QUERY_PATTERN = Pattern.compile("(?i)select\\s+(.+)from\\s+(\\S*)");
-    //Simple query pattern
+    /**
+     * Where query pattern / regular expression.
+     */
     private Pattern WHERE_QUERY_PATTERN = Pattern.compile("(?i)select\\s+(.+)from\\s+(\\S*)\\s+where\\s(.+)");
-    //In folder query pattern
-    private Pattern IN_FOLDER_QUERY_PATTERN = Pattern.compile("(?i)select\\s+(.+)from\\s+(\\S*).*\\s+where\\s+in_folder\\('(.*)'\\)");
+    /**
+     * In Folder query pattern / regular expression.
+     */
+    private Pattern IN_FOLDER_QUERY_PATTERN = Pattern.compile("(?i)select\\s+(.+)from\\s+(\\S*).*\\s+where\\s+in_folder\\((.*)\\)+.*");
+    /**
+     * In Tree query pattern / regular expression.
+     */
+    private Pattern IN_TREE_QUERY_PATTERN = Pattern.compile("(?i)select\\s+(.+)from\\s+(\\S*).*\\s+where\\s+in_tree\\((.*)\\)+.*");
 
     private String fieldsClause = null;
 
@@ -32,6 +47,8 @@ public class Query {
     private List<WhereCondition> whereAndConditions = new ArrayList<>();
 
     private List<WhereCondition> whereOrConditions = new ArrayList<>();
+
+    private String qualifier = null;
 
     private String folderId = null;
 
@@ -51,28 +68,30 @@ public class Query {
     public void parse(String statement) {
         //reset the variables
         this.statement = statement;
-        this.fieldsClause = null;
-        this.typeId = null;
-        this.whereClause = null;
-        this.folderId = null;
+        queryType = null;
+        fieldsClause = null;
+        typeId = null;
+        whereClause = null;
+        qualifier = null;
+        folderId = null;
 
         //Test for "SIMPLE" query
         Matcher simpleMatcher = SIMPLE_QUERY_PATTERN.matcher(statement.trim());
         if (simpleMatcher.matches()) {
-            this.queryType = "SIMPLE";
-            this.fieldsClause = simpleMatcher.group(1).trim();
-            this.typeId = simpleMatcher.group(2).trim();
+            queryType = "SIMPLE";
+            fieldsClause = simpleMatcher.group(1).trim();
+            typeId = simpleMatcher.group(2).trim();
         }
 
         //Test for "WHERE" query
         Matcher whereMatcher = WHERE_QUERY_PATTERN.matcher(statement.trim());
         if (whereMatcher.matches()) {
-            this.queryType = "WHERE";
-            this.fieldsClause = whereMatcher.group(1).trim();
-            this.typeId = whereMatcher.group(2).trim();
-            this.whereClause = whereMatcher.group(3).trim();
+            queryType = "WHERE";
+            fieldsClause = whereMatcher.group(1).trim();
+            typeId = whereMatcher.group(2).trim();
+            whereClause = whereMatcher.group(3).trim();
 
-            String[] conditions = this.whereClause.split(" ");
+            String[] conditions = whereClause.split(" ");
 
             WhereCondition whereCondition = new WhereCondition();
             for (int i = 0; i < conditions.length; i++) {
@@ -90,7 +109,7 @@ public class Query {
                     if (conditions[i].contains("'")) { whereCondition.setValue(conditions[i].replace("'", "")); }
                     //insert condition to conditions list
                     if (whereCondition.isValid()) {
-                        this.whereAndConditions.add(whereCondition);
+                        whereAndConditions.add(whereCondition);
                         whereCondition = new WhereCondition();
                     }
                 } else {
@@ -103,12 +122,63 @@ public class Query {
         //Test for "IN_FOLDER" query
         Matcher inFolderMatcher = IN_FOLDER_QUERY_PATTERN.matcher(statement.trim());
         if (inFolderMatcher.matches()) {
-            this.queryType = "IN_FOLDER";
-            this.fieldsClause = inFolderMatcher.group(1).trim();
-            this.typeId = inFolderMatcher.group(2).trim();
-            this.folderId = inFolderMatcher.group(3).trim();
+            queryType = "IN_FOLDER";
+            fieldsClause = inFolderMatcher.group(1).trim();
+            qualifier = typeId = inFolderMatcher.group(2).trim();
+            String[] inFolderParameters = inFolderMatcher.group(3).trim().replace(" ", "").split(",");
+            //only folder id parameter supplied
+            if (inFolderParameters.length == 1) {
+                if (inFolderParameters[0].trim().equals("")) {
+                    throw new CmisInvalidArgumentException("Missing parameters in the IN_FOLDER function. The parameters are: Qualifier (optional) and Folder ID (mandatory).");
+                }
+                folderId = inFolderParameters[0].trim().replace("'", "").replace("\"", "");
+            }
+            //qualifier and folder id parameters supplied
+            if (inFolderParameters.length == 2) {
+                qualifier = inFolderParameters[0].trim();
+                if (!qualifier.equals("cmis:folder") && !qualifier.equals("cmis:document") && !qualifier.equals("cmis:rodaDocument")) {
+                    qualifier = typeId;
+                }
+                folderId = inFolderParameters[1].trim().replace("'", "").replace("\"", "");
+            }
+            //too many parameters
+            if (inFolderParameters.length > 2) {
+                throw new CmisInvalidArgumentException("IN_FOLDER function takes at most two parameters: Qualifier (optional) and Folder ID (mandatory).");
+            }
         }
 
+        //Test for "IN_TREE" query
+        Matcher inTreeMatcher = IN_TREE_QUERY_PATTERN.matcher(statement.trim());
+        if (inTreeMatcher.matches()) {
+            queryType = "IN_TREE";
+            fieldsClause = inTreeMatcher.group(1).trim();
+            qualifier = typeId = inTreeMatcher.group(2).trim();
+            String[] inTreeParameters = inTreeMatcher.group(3).trim().replace(" ", "").split(",");
+            //only folder id parameter supplied
+            if (inTreeParameters.length == 1) {
+                if (inTreeParameters[0].trim().equals("")) {
+                    throw new CmisInvalidArgumentException("Missing parameters in the IN_TREE function. The parameters are: Qualifier (optional) and Folder ID (mandatory).");
+                }
+                folderId = inTreeParameters[0].trim().replace("'", "").replace("\"", "");
+            }
+            //qualifier and folder id parameters supplied
+            if (inTreeParameters.length == 2) {
+                qualifier = inTreeParameters[0].trim();
+                if (!qualifier.equals("cmis:folder") && !qualifier.equals("cmis:document") && !qualifier.equals("cmis:rodaDocument")) {
+                    qualifier = typeId;
+                }
+                folderId = inTreeParameters[1].trim().replace("'", "").replace("\"", "");
+            }
+            //too many parameters
+            if (inTreeParameters.length > 2) {
+                throw new CmisInvalidArgumentException("IN_TREE function takes at most two parameters: Qualifier (optional) and Folder ID (mandatory).");
+            }
+        }
+
+        //check for a valid query type
+        if (queryType == null) {
+            throw new CmisInvalidArgumentException("Invalid or unsupported query.");
+        }
     }
 
     /**
@@ -197,7 +267,13 @@ public class Query {
         return typeId;
     }
 
-    public String getWhereClause() { return whereClause; }
+    public String getWhereClause() {
+        return whereClause;
+    }
+
+    public String getQualifier() {
+        return qualifier;
+    }
 
     public String getFolderId() {
         return folderId;

@@ -589,22 +589,9 @@ public class FileBridgeRepository {
         //Query the objects database for results
         List<String> objectPaths = database.query(statement);
 
-        //get the parsed query object
-        if (database.getLastQuery().getQueryType() == null) {
-            throw new CmisInvalidArgumentException("Invalid or unsupported query.");
-        } else if (database.getLastQuery().getQueryType().equals("IN_FOLDER")) {
-            if (database.getLastQuery().getFolderId().length() == 0) {
-                throw new CmisInvalidArgumentException("Invalid folder id.");
-            }
-            File folder = getFile(database.getLastQuery().getFolderId());
-            if (!folder.isDirectory()) {
-                throw new CmisInvalidArgumentException("Not a folder!");
-            }
-        }
-
         //get the objects type from the query: cmis:folder / cmis:document / cmis:rodaDocument
         TypeDefinition type = typeManager.getInternalTypeDefinition(database.getLastQuery().getTypeId());
-        if (type == null) { throw new CmisInvalidArgumentException("Unknown type."); }
+        if (type == null) { throw new CmisInvalidArgumentException("Unknown CMIS object type. The supported CMIS object types are: cmis:folder, cmis:document or cmis:rodaDocument."); }
 
         // set defaults if values not set
         boolean iaa = FileBridgeUtils.getBooleanParameter(includeAllowableActions, false);

@@ -1,5 +1,9 @@
 package org.roda.wui.cmis.database;
 
+import org.apache.chemistry.opencmis.commons.PropertyIds;
+import org.roda.wui.cmis.enums.MetadataDublinCoreFieldId;
+import org.roda.wui.cmis.enums.MetadataEadFieldId;
+import org.roda.wui.cmis.enums.MetadataKeyValueFieldId;
 import org.sqlite.SQLiteException;
 
 import java.sql.*;
@@ -216,6 +220,113 @@ public class Database {
     }
 
     /**
+     * Function responsible for returning a full list of metadata fields.
+     * @return The list of metadata fields.
+     */
+    private ArrayList<String> getMetadataFields() {
+        ArrayList<String> metadataFields = new ArrayList<>();
+
+        //CMIS base fields
+        metadataFields.add(PropertyIds.OBJECT_ID);
+        metadataFields.add(PropertyIds.NAME);
+        metadataFields.add(PropertyIds.CREATED_BY);
+        metadataFields.add(PropertyIds.LAST_MODIFIED_BY);
+        metadataFields.add(PropertyIds.CREATION_DATE);
+        metadataFields.add(PropertyIds.LAST_MODIFICATION_DATE);
+        metadataFields.add(PropertyIds.CHANGE_TOKEN);
+        metadataFields.add(PropertyIds.DESCRIPTION);
+        metadataFields.add(PropertyIds.SECONDARY_OBJECT_TYPE_IDS);
+        metadataFields.add(PropertyIds.BASE_TYPE_ID);
+        metadataFields.add(PropertyIds.OBJECT_TYPE_ID);
+        metadataFields.add(PropertyIds.PATH);
+        metadataFields.add(PropertyIds.PARENT_ID);
+        metadataFields.add(PropertyIds.ALLOWED_CHILD_OBJECT_TYPE_IDS);
+        metadataFields.add(PropertyIds.IS_IMMUTABLE);
+        metadataFields.add(PropertyIds.IS_LATEST_VERSION);
+        metadataFields.add(PropertyIds.IS_MAJOR_VERSION);
+        metadataFields.add(PropertyIds.IS_LATEST_MAJOR_VERSION);
+        metadataFields.add(PropertyIds.VERSION_LABEL);
+        metadataFields.add(PropertyIds.VERSION_SERIES_ID);
+        metadataFields.add(PropertyIds.IS_VERSION_SERIES_CHECKED_OUT);
+        metadataFields.add(PropertyIds.VERSION_SERIES_CHECKED_OUT_BY);
+        metadataFields.add(PropertyIds.VERSION_SERIES_CHECKED_OUT_ID);
+        metadataFields.add(PropertyIds.CHECKIN_COMMENT);
+        metadataFields.add(PropertyIds.IS_PRIVATE_WORKING_COPY);
+        metadataFields.add(PropertyIds.CONTENT_STREAM_LENGTH);
+        metadataFields.add(PropertyIds.CONTENT_STREAM_MIME_TYPE);
+        metadataFields.add(PropertyIds.CONTENT_STREAM_FILE_NAME);
+        metadataFields.add(PropertyIds.CONTENT_STREAM_ID);
+
+        //EAD 2002 metadata fields
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_ID.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_TITLE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_COUNTRY_CODE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_REPOSITORY_CODE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ODD_STATUS_DESCRIPTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_SCOPE_CONTENT.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ARRANGEMENT.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_APPRAISAL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ACQUISITION_INFO.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ACCRUALS.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_CUSTODIAL_HISTORY.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_DATE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PROCESS_INFO_ARCHIVIST_NOTES.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINALS_LOCATION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ALTERNATIVE_FORM_AVAILABLE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_RELATED_MATERIAL.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ACCESS_RESTRICTIONS.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_USE_RESTRICTIONS.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_OTHER_FIND_AID.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_TECH.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_BIBLIOGRAPHY.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PREFER_CITE.value());
+
+        //Dublin Core 2002 12 12 metadata fields
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TITLE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_IDENTIFIER.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CREATOR.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_INITIAL_DATE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FINAL_DATE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_DESCRIPTION.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_PUBLISHER.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_CONTRIBUTOR.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RIGHTS.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_LANGUAGE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_COVERAGE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_FORMAT.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_RELATION.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SUBJECT.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_TYPE.value());
+        metadataFields.add(MetadataDublinCoreFieldId.METADATA_DUBLIN_CORE_SOURCE.value());
+
+        //Key Value metadata fields
+        metadataFields.add(MetadataKeyValueFieldId.METADATA_KEY_VALUE_ID.value());
+        metadataFields.add(MetadataKeyValueFieldId.METADATA_KEY_VALUE_TITLE.value());
+        metadataFields.add(MetadataKeyValueFieldId.METADATA_KEY_VALUE_PRODUCER.value());
+        metadataFields.add(MetadataKeyValueFieldId.METADATA_KEY_VALUE_DATE.value());
+
+        return metadataFields;
+    }
+
+    /**
      * Method responsible for inserting a new object into the correct table given its objectId.
      * @param table The table name.
      * @param objectId The new object's objectId.
@@ -294,41 +405,28 @@ public class Database {
 
         // query preparation
 
-        // SELECT fields
-        if (!queryParser.searchAllFields()) {
-            String fieldsClause = "";
-            for (String field : queryParser.getFieldsArray()) {
-                fieldsClause += "[" + field + "], ";
-            }
-            statement = statement.replaceAll("(?i)SELECT " + queryParser.getFieldsClause(), "SELECT " + fieldsClause + "[cmis:path]");
-        }
-
-        // FROM table
-        statement = statement.replace("[cmis:folder]", "cmis:folder").replace("cmis:folder", "[cmis:folder]");
-        statement = statement.replace("[cmis:document]", "cmis:document").replace("cmis:document", "[cmis:rodaDocument]");
-        statement = statement.replace("[cmis:rodaDocument]", "cmis:rodaDocument").replace("cmis:rodaDocument", "[cmis:rodaDocument]");
-
-        // WHERE fields
-        if (queryParser.getQueryType().equals("WHERE")) {
-            String whereClause = queryParser.getWhereClause();
-            String[] whereTokens = whereClause.split(" ");
-            String resultWhereClause = "";
-            for (String token : whereTokens) {
-                if (token.contains("cmis:") || token.contains("metadata:")) {
-                    resultWhereClause += "[" + token + "] ";
-                } else {
-                    resultWhereClause += token + " ";
-                }
-            }
-            statement = statement.replaceAll("(?i)WHERE " + whereClause, "WHERE " + resultWhereClause);
-            statement = statement.replaceAll("(?i)\\[NOT\\(", "NOT([");
-            statement = statement.replaceAll("(?i)\\)]", "])");
-        }
-
         // IN_FOLDER
         if (queryParser.getQueryType().equals("IN_FOLDER")) {
-
+            String subQuery = "(cmis:path LIKE (SELECT cmis:path FROM cmis:folder WHERE cmis:objectId = '" + queryParser.getFolderId() + "') || '/' || [cmis:name])";
+            statement = statement.replaceAll("(?i)IN_FOLDER\\('" + queryParser.getFolderId() + "'\\)", subQuery);
         }
+
+        // IN_TREE
+        if (queryParser.getQueryType().equals("IN_TREE")) {
+            String subQuery = "(cmis:path LIKE (SELECT cmis:path FROM cmis:folder WHERE cmis:objectId = '" + queryParser.getFolderId() + "') || '%')";
+            statement = statement.replaceAll("(?i)IN_TREE\\('" + queryParser.getFolderId() + "'\\)", subQuery);
+        }
+
+        // Prepare query for execution
+        for (String metadataField : getMetadataFields()) {
+            statement = statement.replaceAll("(?i)\\[" + metadataField + "\\]", metadataField);
+            statement = statement.replaceAll("(?i)" + metadataField, "[" + metadataField + "]");
+        }
+        statement = statement.replaceAll("(?i)\\[cmis:folder\\]", "cmis:folder").replaceAll("(?i)cmis:folder", "[cmis:folder]");
+        statement = statement.replaceAll("(?i)\\[cmis:document\\]", "cmis:document").replaceAll("(?i)cmis:document", "[cmis:rodaDocument]");
+        statement = statement.replaceAll("(?i)\\[cmis:rodaDocument\\]", "cmis:rodaDocument").replaceAll("(?i)cmis:rodaDocument", "[cmis:rodaDocument]");
+        statement = statement.replaceAll("(?i)FROM", ", [cmis:path] FROM");
+        statement = statement.replaceAll("(?i)\\[cmis:path\\] \\, \\[cmis:path\\]", "[cmis:path]");
 
         Statement stmt;
         try {
