@@ -265,18 +265,18 @@ public class Database {
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE_LABEL.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_UNIT_DATE_NORMAL.value());
-        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_EXTENT.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_DIMENSIONS.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION_APPEARANCE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_PHYSICAL_DESCRIPTION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_REPOSITORY_NAME.value());
-        metadataFields.add(MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL_LANGUAGE.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_LANG_MATERIAL.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_NOTE_SOURCE_DESCRIPTION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_NOTE_GENERAL_NOTE.value());
-        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION_CREATION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION_PRODUCTION.value());
+        metadataFields.add(MetadataEadFieldId.METADATA_EAD_ORIGINATION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_ARCHIVE_DESCRIPTION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_MATERIAL_SPECIFICATION.value());
         metadataFields.add(MetadataEadFieldId.METADATA_EAD_ODD_LEVEL_OF_DETAIL.value());
@@ -422,11 +422,21 @@ public class Database {
             statement = statement.replaceAll("(?i)\\[" + metadataField + "\\]", metadataField);
             statement = statement.replaceAll("(?i)" + metadataField, "[" + metadataField + "]");
         }
+        statement = statement.replaceAll("(?i)physicalDescription]Extent", "physicalDescriptionExtent");
+        statement = statement.replaceAll("(?i)physicalDescription]Dimensions", "physicalDescriptionDimensions");
+        statement = statement.replaceAll("(?i)physicalDescription]Appearance", "physicalDescriptionAppearance");
+        statement = statement.replaceAll("(?i)langMaterial]Language", "langMaterialLanguage");
+        statement = statement.replaceAll("(?i)origination]Creator", "originationCreator");
+        statement = statement.replaceAll("(?i)origination]Producer", "originationProducer");
+        statement = statement.replaceAll("(?i)\\[\\[", "[");
+
         statement = statement.replaceAll("(?i)\\[cmis:folder\\]", "cmis:folder").replaceAll("(?i)cmis:folder", "[cmis:folder]");
         statement = statement.replaceAll("(?i)\\[cmis:document\\]", "cmis:document").replaceAll("(?i)cmis:document", "[cmis:rodaDocument]");
         statement = statement.replaceAll("(?i)\\[cmis:rodaDocument\\]", "cmis:rodaDocument").replaceAll("(?i)cmis:rodaDocument", "[cmis:rodaDocument]");
         statement = statement.replaceAll("(?i)FROM", ", [cmis:path] FROM");
         statement = statement.replaceAll("(?i)\\[cmis:path\\] \\, \\[cmis:path\\]", "[cmis:path]");
+
+        //System.out.println("Statement: " + statement);
 
         Statement stmt;
         try {
