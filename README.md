@@ -54,9 +54,9 @@ tab, choose a Tomcat server available from the ```Application Server``` list.
 **André Rosa**
 
 * <https://bitbucket.org/candrelsrosa>
+* <https://github.com/andreros/>
 * <https://facebook.com/candrelsrosa>
 * <https://twitter.com/candrelsrosa>
-
 
 
 ## License
